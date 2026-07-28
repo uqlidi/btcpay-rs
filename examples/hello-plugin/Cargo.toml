@@ -1,0 +1,15 @@
+[package]
+name = "hello-plugin"
+description = "A minimal BTCPay Server plugin written in Rust."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+name = "hello_plugin"
+
+[dependencies]
+btcpay-plugin.workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "btcpay-plugin"
+description = "The contract a BTCPay Server plugin written in Rust implements."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uniffi.workspace = true
+thiserror = "2"
+ctor = "0.2"
+btcpay-plugin-macros.workspace = true
