@@ -1,0 +1,9 @@
+/target
+target/
+
+# .NET build output
+bin/
+obj/
+
+# spike
+/spike
