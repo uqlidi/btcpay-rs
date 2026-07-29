@@ -1,6 +1,27 @@
-[package]
-name = "btcpay-rs"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/btcpay-plugin",
+    "crates/btcpay-plugin-macros",
+    "examples/hello-plugin",
+]
+resolver = "2"
 
-[dependencies]
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.88"
+
+# `uniffi` is pinned as a PAIR with the C# generator. Bumping one REQUIRES bumping the other:
+#   uniffi 0.31  <->  uniffi-bindgen-cs v0.11.0+v0.31.0
+[workspace.dependencies]
+uniffi = "0.31.0"
+btcpay-plugin = { path = "crates/btcpay-plugin", version = "0.1.0" }
+btcpay-plugin-macros = { path = "crates/btcpay-plugin-macros", version = "0.1.0" }
+
+# Keep bindings generation working: `uniffi-bindgen-cs --library` reads metadata from the
+# .so's symbols, and a stripped library makes it exit 0 while producing NOTHING. Strip at
+# packaging time instead, after the bindings have been generated.
+[profile.release]
+lto = true
+strip = false
