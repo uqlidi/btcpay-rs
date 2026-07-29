@@ -1,0 +1,9 @@
+# uniffi output, produced by dotnet/regen-bindings.sh and committed so the C# projects build
+# without a Rust toolchain. Marked generated so it collapses in review and stays out of
+# language statistics: it regenerates wholesale, so its diffs carry no information.
+# Reproduce with dotnet/regen-bindings.sh (pinned to uniffi-bindgen-cs v0.11.0+v0.31.0).
+#
+# Only linguist-generated: it collapses the file in review while leaving it a normal text
+# file. Marking it -diff would make git treat it as binary, so a regeneration could never be
+# inspected, which defeats the point of keeping it reproducible.
+dotnet/BtcpayRs.Host/Generated/btcpay.cs linguist-generated=true

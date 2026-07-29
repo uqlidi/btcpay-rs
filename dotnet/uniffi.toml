@@ -1,0 +1,4 @@
+[bindings.csharp]
+# Public, not the default `internal`: these bindings live in BtcpayRs.Host, and each
+# plugin assembly references them from there rather than compiling its own copy.
+access_modifier = "public"

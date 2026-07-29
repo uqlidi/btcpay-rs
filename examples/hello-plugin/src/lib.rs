@@ -32,19 +32,26 @@ impl Plugin for HelloPlugin {
 
     fn handle(&self, event: HostEvent) -> Result<Vec<PluginAction>, PluginError> {
         Ok(match event {
-            HostEvent::InvoiceStatusChanged {
-                invoice,
-                previous_status,
-            } => {
+            // Settlement is reported by more than one trigger, so act on the specific one
+            // rather than on the resulting status.
+            HostEvent::InvoiceStatusChanged { invoice, trigger } => {
+                let cause = match trigger {
+                    InvoiceTrigger::PaidInFull => "paid in full".to_string(),
+                    InvoiceTrigger::Confirmed => "payment confirmed".to_string(),
+                    InvoiceTrigger::Completed => "completed".to_string(),
+                    InvoiceTrigger::Expired => "expired".to_string(),
+                    InvoiceTrigger::Other { name } => format!("{name} (unmodelled)"),
+                    other => format!("{other:?}"),
+                };
                 vec![PluginAction::Log {
                     level: LogLevel::Info,
                     message: format!(
-                        "invoice {} moved {} -> {} ({} {})",
+                        "invoice {} is now {} ({} {}), because it was {}",
                         invoice.invoice_id,
-                        previous_status,
                         invoice.status,
                         invoice.amount,
-                        invoice.currency
+                        invoice.currency,
+                        cause
                     ),
                 }]
             }
