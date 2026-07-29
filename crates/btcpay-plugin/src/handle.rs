@@ -25,14 +25,14 @@ type PluginFactory = fn() -> Arc<dyn Plugin>;
 static FACTORY: OnceLock<PluginFactory> = OnceLock::new();
 
 /// Registers the plugin implementation. Called by the generated code from
-/// [`macro@btcpay_plugin_macros::plugin`] — not intended for direct use.
+/// [`macro@btcpay_plugin_macros::plugin`]. Not intended for direct use.
 #[doc(hidden)]
 pub fn register_plugin(factory: PluginFactory) {
     if FACTORY.set(factory).is_err() {
         // Two `#[plugin]` attributes in one cdylib: a build-time mistake, and the second
         // registration would be silently ignored. Fail loudly instead.
         panic!(
-            "btcpay-rs: a plugin is already registered in this library — \
+            "btcpay-rs: a plugin is already registered in this library; \
              exactly one type may be annotated with #[btcpay_plugin::plugin]"
         );
     }
@@ -75,13 +75,13 @@ pub struct PluginHandle {
 impl PluginHandle {
     /// Instantiates the registered plugin.
     ///
-    /// Fails if the library contains no `#[btcpay_plugin::plugin]` type — which means the
+    /// Fails if the library contains no `#[btcpay_plugin::plugin]` type, which means the
     /// cdylib was built without linking the plugin, a build-configuration error.
     #[uniffi::constructor]
     pub fn new() -> Result<Arc<Self>, PluginError> {
         let factory = FACTORY.get().ok_or_else(|| {
             PluginError::internal(
-                "no plugin registered in this library — is #[btcpay_plugin::plugin] applied \
+                "no plugin registered in this library; is #[btcpay_plugin::plugin] applied \
                  to your Plugin impl, and is the crate built as a cdylib?",
             )
         })?;

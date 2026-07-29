@@ -89,7 +89,7 @@ impl Plugin for WellBehaved {
     }
 }
 
-/// Panics in every method — the boundary must contain all of it.
+/// Panics in every method; the boundary must contain all of it.
 #[derive(Default)]
 struct Panicking;
 
@@ -162,7 +162,7 @@ fn host_services_mock_persists_settings_and_store() {
 
 #[test]
 fn default_methods_keep_a_minimal_plugin_viable() {
-    /// Implements only `metadata` — everything else must default sensibly.
+    /// Implements only `metadata`; everything else must default sensibly.
     #[derive(Default)]
     struct Minimal;
     impl Plugin for Minimal {

@@ -1,8 +1,8 @@
 //! Write BTCPay Server plugins in Rust.
 //!
 //! A plugin implements [`Plugin`] and annotates the impl with
-//! [`#[btcpay_plugin::plugin]`](macro@plugin). Everything else — the C# shim, the FFI
-//! bindings, packaging — is generated.
+//! [`#[btcpay_plugin::plugin]`](macro@plugin). Everything else (the C# shim, the FFI
+//! bindings, packaging) is generated.
 //!
 //! ```ignore
 //! use btcpay_plugin::prelude::*;
@@ -32,7 +32,7 @@
 //!   [`PluginError::Internal`] naming the method that panicked.
 //! - `stop()` cannot fail, so shutdown is never blocked by plugin code.
 //! - Foreign callbacks ([`HostServices`], [`EventListener`]) are implemented by the host,
-//!   which swallows and logs its own exceptions — see [`host`] for why that matters.
+//!   which swallows and logs its own exceptions. See [`host`] for why that matters.
 
 #![deny(missing_docs)]
 #![warn(clippy::all)]

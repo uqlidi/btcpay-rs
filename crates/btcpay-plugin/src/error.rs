@@ -4,7 +4,7 @@
 /// (`PluginException.InvalidInput`, `PluginException.Internal`, …).
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum PluginError {
-    /// The operator supplied something invalid — surface it on the settings form.
+    /// The operator supplied something invalid; surface it on the settings form.
     #[error("invalid input: {message}")]
     InvalidInput {
         /// Operator-facing explanation of what was wrong.

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PluginMetadata {
     /// Reverse-DNS identifier, e.g. `"Acme.Plugins.Swaps"`. Must match the C# assembly's
-    /// `Identifier` — a mismatch is a build error, not a runtime surprise.
+    /// `Identifier`; a mismatch is a build error, not a runtime surprise.
     pub identifier: String,
     /// Human-readable name shown in BTCPay's plugin list.
     pub name: String,
@@ -78,7 +78,7 @@ pub struct InvoiceSummary {
     pub store_id: String,
     /// BTCPay invoice status, e.g. `"Settled"`.
     pub status: String,
-    /// Amount in the invoice's currency, as a decimal string — never a float. Money in
+    /// Amount in the invoice's currency, as a decimal string, never a float. Money in
     /// binary floating point is a bug waiting to be filed.
     pub amount: String,
     /// ISO currency code of `amount`.
@@ -217,7 +217,7 @@ pub struct UiDocument {
 }
 
 impl UiDocument {
-    /// A document with no content — the default for plugins that expose no settings.
+    /// A document with no content: the default for plugins that expose no settings.
     pub fn empty() -> Self {
         Self {
             ui_version: UI_VERSION,

@@ -1,4 +1,4 @@
-//! Procedural macros for `btcpay-plugin`. Not intended to be used directly — depend on
+//! Procedural macros for `btcpay-plugin`. Not intended to be used directly; depend on
 //! `btcpay-plugin` and use `#[btcpay_plugin::plugin]`.
 
 use proc_macro::TokenStream;
@@ -30,10 +30,10 @@ use syn::{
 /// | `name`        | `CARGO_PKG_NAME`                         |
 /// | `version`     | `CARGO_PKG_VERSION`                      |
 /// | `description` | `CARGO_PKG_DESCRIPTION`                  |
-/// | `btcpay`      | `">=2.4.0"` — the minimum BTCPay version |
+/// | `btcpay`      | `">=2.4.0"` (the minimum BTCPay version) |
 /// | `factory`     | `Default::default()`                     |
 ///
-/// Omit `identifier` to write `metadata()` by hand — necessary when a plugin depends on
+/// Omit `identifier` to write `metadata()` by hand. That is necessary when a plugin depends on
 /// *other* plugins, or computes its identity at runtime.
 ///
 /// # Construction
@@ -58,7 +58,7 @@ pub fn plugin(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(item as ItemImpl);
 
-    // Reject `impl MyType` — registration would compile, but the type would not be usable as
+    // Reject `impl MyType`: registration would compile, but the type would not be usable as
     // a plugin and the error would surface at load time instead of here.
     if input.trait_.is_none() {
         return Error::new_spanned(
@@ -88,7 +88,7 @@ pub fn plugin(attr: TokenStream, item: TokenStream) -> TokenStream {
             return Error::new_spanned(
                 identifier,
                 "this impl already defines `metadata()`, so `identifier = ...` would generate \
-                 a duplicate — remove one of them",
+                 a duplicate; remove one of them",
             )
             .to_compile_error()
             .into();
@@ -220,7 +220,7 @@ impl Args {
                     return Err(Error::new(
                         proc_macro2::Span::call_site(),
                         format!(
-                            "`{key}` only applies when metadata is generated — add \
+                            "`{key}` only applies when metadata is generated; add \
                              `identifier = \"...\"`, or write `metadata()` by hand and drop `{key}`"
                         ),
                     ));

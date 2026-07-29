@@ -9,7 +9,7 @@ use crate::types::{HostEvent, PluginAction, PluginMetadata};
 
 /// What a BTCPay plugin written in Rust must provide.
 ///
-/// This is a **plain Rust trait** — no uniffi annotations. Authors implement it normally and
+/// This is a **plain Rust trait** with no uniffi annotations. Authors implement it normally and
 /// apply [`macro@btcpay_plugin_macros::plugin`] to the impl block; all FFI machinery lives in
 /// this crate, so plugin crates contain no unsafe code and no bindings boilerplate.
 ///
@@ -23,10 +23,10 @@ use crate::types::{HostEvent, PluginAction, PluginMetadata};
 /// impl Plugin for MyPlugin {}
 /// ```
 ///
-/// [`Plugin::metadata`] is the only method without a default — and the attribute writes it
+/// [`Plugin::metadata`] is the only method without a default, and the attribute writes it
 /// for you unless you need to compute it. So a minimal plugin is genuinely two lines.
 pub trait Plugin: Send + Sync + 'static {
-    /// Identity of this plugin. Must be a pure function of the plugin itself — it is called
+    /// Identity of this plugin. Must be a pure function of the plugin itself: it is called
     /// before `start`, and its values must agree with the generated C# constants.
     ///
     /// Usually generated: pass `identifier = "..."` to

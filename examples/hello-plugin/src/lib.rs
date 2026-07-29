@@ -1,5 +1,5 @@
 //! The smallest useful btcpay-rs plugin: it greets, remembers a setting, and reacts to
-//! invoices. Note what is absent — no uniffi annotations, no `unsafe`, no C#.
+//! invoices. Note what is absent: no uniffi annotations, no `unsafe`, no C#.
 
 use std::sync::{Arc, Mutex};
 

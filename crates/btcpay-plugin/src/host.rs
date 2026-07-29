@@ -8,7 +8,7 @@
 //! **panic**. On a synchronous call that surfaces to the C# caller; on a Rust background
 //! thread it unwinds and **kills that thread**, silently stopping the plugin. The generated
 //! `BtcpayRs.Host` implementations therefore wrap every method body in a catch-all that logs
-//! and never rethrows. Plugin authors do not need to do anything — but they should not
+//! and never rethrows. Plugin authors do not need to do anything, but they should not
 //! assume a host call that "returned" actually succeeded, which is why the fallible
 //! operations return [`Result`].
 
@@ -36,7 +36,7 @@ pub trait HostServices: Send + Sync {
     /// Remove a key from this plugin's private store.
     fn store_delete(&self, key: String) -> Result<(), HostError>;
 
-    /// Write to BTCPay's log. Prefer this over `println!` — it reaches the operator.
+    /// Write to BTCPay's log. Prefer this over `println!`: it reaches the operator.
     fn log(&self, level: LogLevel, message: String);
 
     /// Raise a BTCPay notification for the operator.
