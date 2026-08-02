@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- required by the uniffi-generated bindings -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>BtcpayRs.Host</RootNamespace>
+    <AssemblyName>BtcpayRs.Host</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- generated bindings are not ours to document or tidy -->
+    <NoWarn>$(NoWarn);CS1591;CS8632;CS0618;CS1587</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <!--
+    Deliberately no reference to BTCPayServer here. This assembly holds everything that can
+    be tested without a BTCPay checkout: the FFI bindings, native loading, the lifecycle, and
+    the HostServices implementation. BTCPay-specific wiring lives in BtcpayRs.Host.BTCPay.
+  -->
+
+</Project>

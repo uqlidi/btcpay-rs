@@ -1,0 +1,101 @@
+# Minimal BTCPay Server regtest stack for trying a btcpay-rs plugin.
+#
+#   ./dev/run-btcpay.sh
+#
+# Trimmed from BTCPayServer.Tests/docker-compose.yml to the four services BTCPay actually
+# needs to boot: postgres, bitcoind, NBXplorer, and BTCPay itself. No Lightning nodes, no Tor.
+#
+# BTCPay is pinned to the same version the plugin was compiled against. A plugin built against
+# a different BTCPay will be refused by its own dependency condition (">=2.4.0").
+services:
+  postgres:
+    image: postgres:18.1
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    # Durability off: this is a throwaway regtest database, and it starts much faster.
+    command: ["-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # Must be /var/lib/postgresql, NOT /var/lib/postgresql/data. Postgres 18 places its data
+      # in a versioned subdirectory and refuses to start if the mount is at the old path.
+      - postgres_datadir:/var/lib/postgresql
+
+  bitcoind:
+    image: btcpayserver/bitcoin:31.0
+    restart: unless-stopped
+    environment:
+      BITCOIN_NETWORK: regtest
+      BITCOIN_WALLETDIR: "/data/wallets"
+      BITCOIN_EXTRA_ARGS: |-
+        rpcuser=ceiwHEbqWI83
+        rpcpassword=DwubwWsoo3
+        rpcport=43782
+        rpcbind=0.0.0.0:43782
+        rpcallowip=0.0.0.0/0
+        port=39388
+        whitelist=0.0.0.0/0
+        zmqpubrawblock=tcp://0.0.0.0:28332
+        zmqpubrawtx=tcp://0.0.0.0:28333
+        fallbackfee=0.0002
+        minrelaytxfee=0.00001000
+    volumes:
+      - bitcoin_datadir:/data
+
+  nbxplorer:
+    image: nicolasdorier/nbxplorer:2.6.5
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bitcoind:
+        condition: service_started
+    environment:
+      NBXPLORER_NETWORK: regtest
+      NBXPLORER_CHAINS: "btc"
+      NBXPLORER_BTCRPCURL: http://bitcoind:43782/
+      NBXPLORER_BTCNODEENDPOINT: bitcoind:39388
+      NBXPLORER_BTCRPCUSER: ceiwHEbqWI83
+      NBXPLORER_BTCRPCPASSWORD: DwubwWsoo3
+      NBXPLORER_BIND: 0.0.0.0:32838
+      NBXPLORER_MINGAPSIZE: 5
+      NBXPLORER_MAXGAPSIZE: 10
+      NBXPLORER_POSTGRES: User ID=postgres;Include Error Detail=true;Host=postgres;Port=5432;Database=nbxplorer
+      NBXPLORER_EXPOSERPC: 1
+      NBXPLORER_NOAUTH: 1
+    volumes:
+      - nbxplorer_datadir:/datadir
+
+  btcpayserver:
+    image: btcpayserver/btcpayserver:2.4.1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nbxplorer:
+        condition: service_started
+    ports:
+      - "14142:49392"
+    environment:
+      BTCPAY_NETWORK: regtest
+      BTCPAY_BIND: 0.0.0.0:49392
+      BTCPAY_CHAINS: "btc"
+      BTCPAY_BTCEXPLORERURL: http://nbxplorer:32838/
+      BTCPAY_POSTGRES: User ID=postgres;Include Error Detail=true;Host=postgres;Port=5432;Database=btcpayserver
+      BTCPAY_EXPLORERPOSTGRES: User ID=postgres;Include Error Detail=true;Host=postgres;Port=5432;Database=nbxplorer
+      BTCPAY_DEBUGLOG: btcpay.log
+      # Where PluginManager scans. It expects one subdirectory per plugin, named after the
+      # plugin identifier and containing <identifier>.dll.
+      BTCPAY_PLUGINDIR: /plugins
+    volumes:
+      - btcpay_datadir:/datadir
+      - ./plugins:/plugins
+
+volumes:
+  postgres_datadir:
+  bitcoin_datadir:
+  nbxplorer_datadir:
+  btcpay_datadir:

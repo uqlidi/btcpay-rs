@@ -85,6 +85,41 @@ pub struct InvoiceSummary {
     pub currency: String,
 }
 
+/// What moved an invoice into its current status.
+///
+/// BTCPay reports the event that fired, not the status the invoice came from, so this names
+/// the cause rather than pretending to describe a transition. If you need to know the prior
+/// status, record it yourself when you see the earlier event.
+///
+/// [`InvoiceTrigger::Other`] carries anything this version of btcpay-rs does not model, so a
+/// new BTCPay event shows up as data instead of breaking the contract.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum InvoiceTrigger {
+    /// The invoice received enough to cover its total, but is not yet confirmed.
+    PaidInFull,
+    /// A payment reached the required number of confirmations.
+    Confirmed,
+    /// The invoice is fully settled and closed.
+    Completed,
+    /// The invoice expired before being paid in full.
+    Expired,
+    /// The invoice expired having received a partial payment.
+    ExpiredPaidPartial,
+    /// An operator marked the invoice settled by hand.
+    MarkedCompleted,
+    /// An operator marked the invoice invalid by hand.
+    MarkedInvalid,
+    /// A payment arrived (possibly one of several).
+    ReceivedPayment,
+    /// A payment was settled on-chain or on Lightning.
+    PaymentSettled,
+    /// A BTCPay event this version of btcpay-rs does not model.
+    Other {
+        /// BTCPay's raw event name, e.g. `"invoice_failedToConfirm"`.
+        name: String,
+    },
+}
+
 /// Something that happened in BTCPay, delivered to the plugin.
 #[derive(Debug, Clone, uniffi::Enum)]
 pub enum HostEvent {
@@ -94,11 +129,15 @@ pub enum HostEvent {
         invoice: InvoiceSummary,
     },
     /// An invoice changed status.
+    ///
+    /// Several triggers can leave an invoice in the same status (a payment confirming and
+    /// the invoice completing both end at `Settled`), so treat handling as idempotent rather
+    /// than assuming one event per status.
     InvoiceStatusChanged {
         /// The invoice in its new state.
         invoice: InvoiceSummary,
-        /// The status it moved away from.
-        previous_status: String,
+        /// What caused the change.
+        trigger: InvoiceTrigger,
     },
     /// The operator saved the settings form.
     SettingsUpdated {

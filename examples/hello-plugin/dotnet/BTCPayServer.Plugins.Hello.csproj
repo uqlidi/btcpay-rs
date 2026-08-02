@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The entire C# side of a btcpay-rs plugin. In M3 this file and Plugin.cs are generated from
+    btcpay.toml, so a plugin author never edits either.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>BTCPayServer.Plugins.Hello</AssemblyName>
+    <RootNamespace>BTCPayServer.Plugins.Hello</RootNamespace>
+    <!-- Drives BaseBTCPayServerPlugin.Version, which BTCPay's packer records. Kept in step
+         with Cargo.toml by the build pipeline. -->
+    <Version>0.1.0</Version>
+    <Description>Example plugin demonstrating btcpay-rs.</Description>
+    <NoWarn>$(NoWarn);CS1591;CS8632</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <PreserveCompilationContext>false</PreserveCompilationContext>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <BtcpayServerProject Condition="'$(BtcpayServerProject)' == ''">../../../submodules/btcpayserver/BTCPayServer/BTCPayServer.csproj</BtcpayServerProject>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <Properties>StaticWebAssetsEnabled=false</Properties>
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native;build;buildTransitive;contentFiles</ExcludeAssets>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(BtcpayServerProject)" />
+    <!-- Private=true so this plugin carries its own copy of the host assemblies. They load
+         into this plugin's AssemblyLoadContext, which is what keeps its native library
+         separate from every other plugin's despite the shared file name. -->
+    <ProjectReference Include="../../../dotnet/BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj">
+      <Private>true</Private>
+      <ExcludeAssets></ExcludeAssets>
+    </ProjectReference>
+    <!-- Referenced explicitly even though it is a transitive dependency: the
+         ItemDefinitionGroup above sets Private=false for every ProjectReference (needed so
+         BTCPayServer's own assemblies stay out of the package), and that suppression also
+         applies to anything reaching us transitively. Without this line the package builds
+         and packs cleanly but omits BtcpayRs.Host.dll, and the plugin fails at load. -->
+    <ProjectReference Include="../../../dotnet/BtcpayRs.Host/BtcpayRs.Host.csproj">
+      <Private>true</Private>
+      <ExcludeAssets></ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Flat beside the plugin assembly: the layout BTCPay's load context actually resolves. -->
+    <None Include="../../../target/release/libbtcpay_plugin_native.so"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

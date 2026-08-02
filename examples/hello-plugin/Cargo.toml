@@ -9,7 +9,12 @@ publish = false
 
 [lib]
 crate-type = ["cdylib"]
-name = "hello_plugin"
+# Every btcpay-rs plugin builds its cdylib under this name, never the crate's own name.
+# The generated C# bakes it into [DllImport], so a fixed name is what lets one set of
+# bindings ship inside BtcpayRs.Host instead of being regenerated per plugin. Plugins stay
+# isolated regardless: each lives in its own AssemblyLoadContext and its own directory, and
+# the loader resolves by absolute path.
+name = "btcpay_plugin_native"
 
 [dependencies]
 btcpay-plugin.workspace = true

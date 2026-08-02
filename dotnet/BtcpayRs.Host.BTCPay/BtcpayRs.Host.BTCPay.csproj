@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>BtcpayRs.Host.BTCPay</RootNamespace>
+    <AssemblyName>BtcpayRs.Host.BTCPay</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS8632;CS0618</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    BTCPayServer.Abstractions is not published on NuGet: plugins compile against a checkout of
+    the BTCPay source. Point this at yours (the plugin template uses a git submodule):
+      dotnet build -p:BtcpayServerProject=/path/to/btcpayserver/BTCPayServer/BTCPayServer.csproj
+  -->
+  <PropertyGroup>
+    <BtcpayServerProject Condition="'$(BtcpayServerProject)' == ''">../../submodules/btcpayserver/BTCPayServer/BTCPayServer.csproj</BtcpayServerProject>
+  </PropertyGroup>
+
+  <!-- Referencing BTCPayServer must not drop its artifacts into a plugin's published output. -->
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <Properties>StaticWebAssetsEnabled=false</Properties>
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native;build;buildTransitive;contentFiles</ExcludeAssets>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(BtcpayServerProject)" />
+    <!-- Private=true: each plugin ships its own copy, loaded into its own load context.
+         That is what keeps identically-named native libraries from colliding. -->
+    <ProjectReference Include="../BtcpayRs.Host/BtcpayRs.Host.csproj">
+      <Private>true</Private>
+      <ExcludeAssets></ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

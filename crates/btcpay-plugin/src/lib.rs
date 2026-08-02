@@ -48,7 +48,7 @@ pub use handle::{btcpay_rs_abi_version, PluginHandle, SharedEventListener, ABI_V
 pub use host::{EventListener, HostServices};
 pub use plugin::Plugin;
 pub use types::{
-    HostEvent, InvoiceSummary, LogLevel, Notification, PluginAction, PluginDependency, PluginEvent,
+    HostEvent, InvoiceSummary, InvoiceTrigger, LogLevel, Notification, PluginAction, PluginDependency, PluginEvent,
     PluginMetadata, UiDocument, WebhookRequest, UI_VERSION,
 };
 
@@ -61,7 +61,8 @@ pub use btcpay_plugin_macros::plugin;
 pub mod prelude {
     pub use crate::UiDocument;
     pub use crate::{
-        EventListener, HostError, HostEvent, HostServices, InvoiceSummary, LogLevel, Notification,
+        EventListener, HostError, HostEvent, HostServices, InvoiceSummary, InvoiceTrigger, LogLevel,
+        Notification,
         Plugin, PluginAction, PluginDependency, PluginError, PluginEvent, PluginMetadata,
         WebhookRequest,
     };
