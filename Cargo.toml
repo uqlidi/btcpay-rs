@@ -2,6 +2,7 @@
 members = [
     "crates/btcpay-plugin",
     "crates/btcpay-plugin-macros",
+    "crates/cargo-btcpay",
     "examples/hello-plugin",
 ]
 resolver = "2"

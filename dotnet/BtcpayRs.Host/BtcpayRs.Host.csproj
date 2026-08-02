@@ -25,4 +25,16 @@
     the HostServices implementation. BTCPay-specific wiring lives in BtcpayRs.Host.BTCPay.
   -->
 
+  <!--
+    Generated/btcpay.cs is not in source control: it is uniffi output. Without this check its
+    absence surfaces as "The type or namespace name 'uniffi' could not be found" repeated
+    across every file, which says nothing about the real cause.
+  -->
+  <Target Name="EnsureBindingsGenerated" BeforeTargets="BeforeCompile">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Generated/btcpay.cs')"
+           Text="The Rust bindings are missing. Run dotnet/regen-bindings.sh to generate Generated/btcpay.cs (needs the Rust toolchain and uniffi-bindgen-cs)." />
+    <Error Condition="Exists('$(MSBuildProjectDirectory)/Generated/btcpay.cs') And '$([System.IO.File]::ReadAllText(&quot;$(MSBuildProjectDirectory)/Generated/btcpay.cs&quot;).Length)' == '0'"
+           Text="Generated/btcpay.cs is empty, which happens when the plugin library was stripped before the bindings were generated. Re-run dotnet/regen-bindings.sh." />
+  </Target>
+
 </Project>
