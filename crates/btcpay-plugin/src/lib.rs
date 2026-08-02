@@ -41,6 +41,7 @@ mod error;
 mod handle;
 pub mod host;
 mod plugin;
+mod tooling;
 mod types;
 
 pub use error::{HostError, PluginError};

@@ -1,0 +1,43 @@
+# {{display_name}}
+
+{{description}}
+
+A [BTCPay Server](https://btcpayserver.org) plugin written in Rust with
+[btcpay-rs](https://github.com/uqlidi/btcpay-rs). All the logic lives in `src/lib.rs`;
+the C# that BTCPay actually loads is generated at build time and is not part of this
+repository.
+
+## Requirements
+
+- Rust 1.88 or newer
+- .NET SDK 10.0, to build the generated shim
+
+## Developing
+
+```sh
+cargo build            # compile the plugin
+cargo test             # run your tests
+cargo btcpay package   # produce an installable .btcpay
+```
+
+The first build fetches a BTCPay Server checkout, because `BTCPayServer.Abstractions` is
+not published on NuGet. It is cached, so only the first build pays for it. Change which
+version you target in `btcpay.toml`.
+
+## Installing
+
+Upload the file from `artifacts/` in BTCPay under Server Settings, Plugins, then restart
+BTCPay. Plugins load once at startup, so a restart is required after installing or
+upgrading.
+
+## Where things live
+
+| Path | What it is |
+|---|---|
+| `src/lib.rs` | your plugin |
+| `btcpay.toml` | which BTCPay version to build against, and target platforms |
+| `artifacts/` | the packaged plugin (generated) |
+| `target/` | build output, including the generated C# (generated) |
+
+Identity (identifier, name, version) comes from the attribute in `src/lib.rs` and from
+`Cargo.toml`. There is no second copy anywhere, so nothing can fall out of step.

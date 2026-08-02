@@ -38,6 +38,12 @@ pub fn register_plugin(factory: PluginFactory) {
     }
 }
 
+/// The registered factory, if a plugin has been registered. Used by the build tooling in
+/// [`crate::tooling`], which reads metadata without going through the uniffi contract.
+pub(crate) fn plugin_factory() -> Option<PluginFactory> {
+    FACTORY.get().copied()
+}
+
 /// Runs `f`, converting a panic into a [`PluginError`] rather than letting it unwind across
 /// the FFI boundary.
 ///

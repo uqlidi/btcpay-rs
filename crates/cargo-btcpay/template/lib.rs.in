@@ -1,0 +1,47 @@
+//! {{display_name}}: a BTCPay Server plugin written in Rust.
+
+use btcpay_plugin::prelude::*;
+
+#[derive(Default)]
+struct Plugin {
+    host: Mutex<Option<Arc<dyn HostServices>>>,
+}
+
+// metadata() is generated from this attribute plus Cargo.toml, so the version you publish
+// cannot drift from the crate that built it. Every other method below has a default: delete
+// what you do not need.
+#[btcpay_plugin::plugin(identifier = "{{identifier}}", name = "{{display_name}}")]
+impl btcpay_plugin::Plugin for Plugin {
+    /// Called once when BTCPay starts the plugin. Spawn background work here.
+    fn start(&self, host: Arc<dyn HostServices>) -> Result<(), PluginError> {
+        host.log(LogLevel::Info, "{{display_name}} started".to_string());
+        *self.host.lock().unwrap() = Some(host);
+        Ok(())
+    }
+
+    /// Called on shutdown. If you spawned a thread in start(), join it here: no callback may
+    /// reach the host after this returns.
+    fn stop(&self) {
+        *self.host.lock().unwrap() = None;
+    }
+
+    /// React to something that happened in BTCPay, and ask the host to do things in return.
+    fn handle(&self, event: HostEvent) -> Result<Vec<PluginAction>, PluginError> {
+        Ok(match event {
+            HostEvent::InvoiceStatusChanged { invoice, trigger } => {
+                // More than one trigger can leave an invoice in the same status, so decide
+                // on the trigger rather than the status, and keep handling idempotent.
+                vec![PluginAction::Log {
+                    level: LogLevel::Info,
+                    message: format!(
+                        "invoice {} is now {} ({:?})",
+                        invoice.invoice_id, invoice.status, trigger
+                    ),
+                }]
+            }
+            _ => Vec::new(),
+        })
+    }
+}
+
+use std::sync::Mutex;

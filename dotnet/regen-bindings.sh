@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Regenerates the C# bindings from the Rust contract. Run after changing anything exported
-# from btcpay-plugin, then commit the result.
+# Regenerates the C# bindings from the Rust contract.
+#
+# The output is not in source control: it is derived, and only people building this repo need
+# it. Run this once after cloning, and again whenever the exported Rust surface changes.
+# Plugin authors never run it: they consume BtcpayRs.Host as a compiled assembly.
 #
 # The output is identical for every plugin: the namespace is fixed by setup_scaffolding!,
 # and the DllImport name is fixed because every btcpay-rs plugin builds its cdylib as
