@@ -1,0 +1,92 @@
+name: Cold build
+
+# Everything in CI is heavily cached: cargo, NuGet, the BTCPay checkout, the packer, the
+# binding generator. That makes the normal runs fast and makes them a poor test of what a new
+# contributor actually experiences on a fresh clone.
+#
+# This deliberately uses no caches at all. It is slow, which is the point: it measures the
+# real cost of a first build, and it catches a cached artifact masking a broken one. The
+# empty bindings file that shipped in an earlier commit was exactly that shape of bug.
+on:
+  schedule:
+    # Sunday 05:00 UTC, so a failure is waiting on Monday rather than mid-week.
+    - cron: "0 5 * * 0"
+  workflow_dispatch:
+
+env:
+  UNIFFI_BINDGEN_CS_TAG: v0.11.0+v0.31.0
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  from-scratch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # No Swatinem/rust-cache, no actions/cache. Nothing is warm.
+
+      - name: Duplicated version pins agree
+        run: ./dev/check-pins.sh
+
+      - name: Tests
+        run: cargo test --all-features
+
+      - name: Install the binding generator
+        run: |
+          start=$SECONDS
+          cargo install uniffi-bindgen-cs \
+            --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+            --tag "$UNIFFI_BINDGEN_CS_TAG"
+          echo "generator built in $((SECONDS - start))s"
+
+      # This is the step a newcomer waits on: it clones BTCPay and restores its NuGet
+      # packages, because BTCPayServer.Abstractions is not published.
+      - name: Package the example plugin, cold
+        run: |
+          start=$SECONDS
+          cargo build --release -p cargo-btcpay
+          ./target/release/cargo-btcpay btcpay package \
+            --manifest-dir examples/hello-plugin --out artifacts
+          echo "cold package took $((SECONDS - start))s"
+
+      - name: Report what a first build costs
+        run: |
+          PKG=$(find artifacts -name '*.btcpay' | head -1)
+          {
+            echo "### Cold build"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| package | \`$(basename "$PKG")\` |"
+            echo "| size | $(du -h "$PKG" | cut -f1) |"
+            echo "| BTCPay checkout | $(du -sh ~/.cache/btcpay-rs/btcpayserver 2>/dev/null | cut -f1) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: It still runs in BTCPay
+        run: |
+          ./dev/run-btcpay.sh "$(find "$PWD/artifacts" -name '*.btcpay' | head -1)"
+          ./dev/assert-plugin-loaded.sh BTCPayServer.Plugins.Hello Hello
+
+      - name: A scaffolded plugin also builds from scratch
+        run: |
+          ./target/release/cargo-btcpay btcpay new demo-plugin \
+            --path /tmp/demo-plugin \
+            --dev-path "$GITHUB_WORKSPACE/crates/btcpay-plugin"
+          cd /tmp/demo-plugin && cargo build --release
+
+      - name: BTCPay logs
+        if: always()
+        run: docker compose -f dev/docker-compose.yml logs --tail 200 btcpayserver
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f dev/docker-compose.yml down -v

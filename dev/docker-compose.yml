@@ -70,7 +70,10 @@ services:
       - nbxplorer_datadir:/datadir
 
   btcpayserver:
-    image: btcpayserver/btcpayserver:2.4.1
+    # Overridable so compatibility testing can run the same plugin against another BTCPay.
+    # It must match the version the plugin was compiled against, or the plugin's own
+    # dependency condition will refuse it.
+    image: btcpayserver/btcpayserver:${BTCPAY_VERSION:-2.4.1}
     restart: unless-stopped
     depends_on:
       postgres:

@@ -47,11 +47,7 @@ impl Plugin for HelloPlugin {
                     level: LogLevel::Info,
                     message: format!(
                         "invoice {} is now {} ({} {}), because it was {}",
-                        invoice.invoice_id,
-                        invoice.status,
-                        invoice.amount,
-                        invoice.currency,
-                        cause
+                        invoice.invoice_id, invoice.status, invoice.amount, invoice.currency, cause
                     ),
                 }]
             }

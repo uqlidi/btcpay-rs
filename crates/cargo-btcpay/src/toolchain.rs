@@ -112,9 +112,7 @@ pub fn ensure_btcpayserver(tag: &str) -> Result<PathBuf, String> {
             &checkout.to_string_lossy(),
         ]),
     )
-    .map_err(|e| {
-        format!("{e}\nIs `{tag}` a real BTCPay Server tag? Check btcpay.toml.")
-    })?;
+    .map_err(|e| format!("{e}\nIs `{tag}` a real BTCPay Server tag? Check btcpay.toml."))?;
 
     if !project.exists() {
         return Err(format!(

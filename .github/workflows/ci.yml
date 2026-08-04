@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+# These are expensive; a newer push makes an in-flight run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned as a pair with the uniffi crate: the generator targets one specific uniffi
+  # release, and a mismatch yields bindings that compile but do not match the library.
+  UNIFFI_BINDGEN_CS_TAG: v0.11.0+v0.31.0
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  # Seconds, and guards the mismatches this codebase is most likely to produce: the uniffi
+  # pair is pinned in five places, and the ABI version in two. Both fail far from the cause.
+  pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Duplicated version pins agree
+        run: ./dev/check-pins.sh
+
+  # Everything that needs no .NET. The fast feedback loop, and it catches most breakage.
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-features
+
+  # The C# tests drive the real FFI boundary, so they need a compiled plugin library and
+  # freshly generated bindings. Toolchains come from standard actions rather than the
+  # published image, so this works on a fork and needs nothing to exist beforehand.
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: dotnet
+
+      # Building the generator is a multi-minute compile, so it is cached against its pinned
+      # tag rather than rebuilt every run.
+      - name: Cache the binding generator
+        id: bindgen-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/uniffi-bindgen-cs
+          key: bindgen-${{ env.UNIFFI_BINDGEN_CS_TAG }}
+
+      - name: Install the binding generator
+        if: steps.bindgen-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install uniffi-bindgen-cs \
+            --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+            --tag "$UNIFFI_BINDGEN_CS_TAG"
+
+      - name: Build the plugin library
+        run: cargo build --release -p hello-plugin
+
+      # Generated, never committed: only people building this repo need them.
+      - name: Generate bindings
+        run: ./dotnet/regen-bindings.sh
+
+      # A stripped library makes the generator exit successfully having written nothing, so
+      # the file is checked rather than the exit code.
+      - name: The bindings are not empty
+        run: |
+          test -s dotnet/BtcpayRs.Host/Generated/btcpay.cs \
+            || { echo "the generator produced nothing; is the library stripped?"; exit 1; }
+          wc -l dotnet/BtcpayRs.Host/Generated/btcpay.cs
+
+      - name: Test the host
+        run: dotnet test dotnet/BtcpayRs.Host.Tests/BtcpayRs.Host.Tests.csproj -c Release
+
+  # Proves a scaffolded project actually builds, and that it contains no C# to maintain.
+  scaffolding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: scaffolding
+
+      - name: Build the CLI
+        run: cargo build --release -p cargo-btcpay
+
+      # --dev-path because btcpay-plugin is not on crates.io yet, so the template's version
+      # requirement cannot resolve. Remove once it is published.
+      - name: Scaffold a plugin
+        run: |
+          ./target/release/cargo-btcpay btcpay new demo-plugin \
+            --path /tmp/demo-plugin \
+            --dev-path "$GITHUB_WORKSPACE/crates/btcpay-plugin"
+
+      - name: A scaffolded project has no C# to maintain
+        run: |
+          found=$(find /tmp/demo-plugin \( -name '*.cs' -o -name '*.csproj' \) -print)
+          if [ -n "$found" ]; then
+            echo "the scaffold should contain no C#; the shim is generated at build time"
+            echo "$found"
+            exit 1
+          fi
+
+      - name: It compiles
+        run: cargo build --release
+        working-directory: /tmp/demo-plugin
+
+      - name: And reports the identity it was scaffolded with
+        run: |
+          ./target/release/cargo-btcpay btcpay inspect \
+            /tmp/demo-plugin/target/release/libbtcpay_plugin_native.so | tee /tmp/inspect.txt
+          grep -q "BTCPayServer.Plugins.DemoPlugin" /tmp/inspect.txt
+          grep -q "BTCPayServer >=2.4.0" /tmp/inspect.txt

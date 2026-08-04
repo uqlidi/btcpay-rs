@@ -21,6 +21,11 @@ pub struct NewPlugin {
     pub identifier: String,
     pub display_name: String,
     pub description: String,
+    /// Point the generated crate at a local btcpay-plugin instead of the published one.
+    ///
+    /// Only for testing this repository against itself: `btcpay-plugin` is not on crates.io
+    /// yet, so a scaffolded project cannot resolve its dependency without this.
+    pub btcpay_plugin_path: Option<PathBuf>,
 }
 
 /// Creates the project on disk, returning the files written.
@@ -28,7 +33,12 @@ pub fn create(spec: &NewPlugin) -> Result<Vec<PathBuf>, String> {
     validate_identifier(&spec.identifier)?;
     validate_crate_name(&spec.crate_name)?;
 
-    if spec.directory.exists() && spec.directory.read_dir().is_ok_and(|mut d| d.next().is_some()) {
+    if spec.directory.exists()
+        && spec
+            .directory
+            .read_dir()
+            .is_ok_and(|mut d| d.next().is_some())
+    {
         return Err(format!(
             "{} already exists and is not empty",
             spec.directory.display()
@@ -42,7 +52,10 @@ pub fn create(spec: &NewPlugin) -> Result<Vec<PathBuf>, String> {
     let files = [
         (spec.directory.join("Cargo.toml"), render(CARGO_TOML, spec)),
         (src.join("lib.rs"), render(LIB_RS, spec)),
-        (spec.directory.join("btcpay.toml"), render(BTCPAY_TOML, spec)),
+        (
+            spec.directory.join("btcpay.toml"),
+            render(BTCPAY_TOML, spec),
+        ),
         (spec.directory.join(".gitignore"), render(GITIGNORE, spec)),
         (spec.directory.join("README.md"), render(README, spec)),
     ];
@@ -57,11 +70,19 @@ pub fn create(spec: &NewPlugin) -> Result<Vec<PathBuf>, String> {
 }
 
 fn render(template: &str, spec: &NewPlugin) -> String {
-    template
+    let rendered = template
         .replace("{{crate_name}}", &spec.crate_name)
         .replace("{{identifier}}", &spec.identifier)
         .replace("{{display_name}}", &spec.display_name)
-        .replace("{{description}}", &spec.description)
+        .replace("{{description}}", &spec.description);
+
+    match &spec.btcpay_plugin_path {
+        Some(path) => rendered.replace(
+            r#"btcpay-plugin = "0.1""#,
+            &format!(r#"btcpay-plugin = {{ path = "{}" }}"#, path.display()),
+        ),
+        None => rendered,
+    }
 }
 
 /// BTCPay identifiers are reverse-DNS and become both a C# namespace and a directory name,
@@ -81,15 +102,24 @@ fn validate_identifier(identifier: &str) -> Result<(), String> {
 
     for segment in segments {
         if segment.is_empty() {
-            return Err(format!("plugin identifier `{identifier}` has an empty segment"));
+            return Err(format!(
+                "plugin identifier `{identifier}` has an empty segment"
+            ));
         }
-        if !segment.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        if !segment
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+        {
             return Err(format!(
                 "segment `{segment}` in `{identifier}` must start with a letter: the \
                  identifier becomes a C# namespace"
             ));
         }
-        if let Some(bad) = segment.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '_') {
+        if let Some(bad) = segment
+            .chars()
+            .find(|c| !c.is_ascii_alphanumeric() && *c != '_')
+        {
             return Err(format!(
                 "character `{bad}` in `{identifier}` is not allowed: use letters, digits and \
                  underscores, separated by dots"
@@ -106,7 +136,10 @@ fn validate_crate_name(name: &str) -> Result<(), String> {
     if !name.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
         return Err(format!("crate name `{name}` must start with a letter"));
     }
-    if let Some(bad) = name.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '-' && *c != '_') {
+    if let Some(bad) = name
+        .chars()
+        .find(|c| !c.is_ascii_alphanumeric() && *c != '-' && *c != '_')
+    {
         return Err(format!(
             "character `{bad}` in crate name `{name}` is not allowed: use letters, digits, \
              hyphens and underscores"
@@ -163,6 +196,7 @@ mod tests {
             identifier: "Acme.Plugins.Mine".into(),
             display_name: "My Plugin".into(),
             description: "Does something useful.".into(),
+            btcpay_plugin_path: None,
         }
     }
 
@@ -209,7 +243,10 @@ mod tests {
         create(&spec(&target)).unwrap();
 
         let cargo = std::fs::read_to_string(target.join("Cargo.toml")).unwrap();
-        assert!(cargo.contains(r#"name = "btcpay_plugin_native""#), "got: {cargo}");
+        assert!(
+            cargo.contains(r#"name = "btcpay_plugin_native""#),
+            "got: {cargo}"
+        );
     }
 
     #[test]
@@ -218,10 +255,19 @@ mod tests {
         assert!(validate_identifier("A.B").is_ok());
 
         assert!(validate_identifier("").is_err());
-        assert!(validate_identifier("NoDots").is_err(), "needs reverse-DNS form");
+        assert!(
+            validate_identifier("NoDots").is_err(),
+            "needs reverse-DNS form"
+        );
         assert!(validate_identifier("Acme..Thing").is_err(), "empty segment");
-        assert!(validate_identifier("Acme.9Lives").is_err(), "segment starts with a digit");
-        assert!(validate_identifier("Acme.My-Plugin").is_err(), "hyphen is not valid in C#");
+        assert!(
+            validate_identifier("Acme.9Lives").is_err(),
+            "segment starts with a digit"
+        );
+        assert!(
+            validate_identifier("Acme.My-Plugin").is_err(),
+            "hyphen is not valid in C#"
+        );
     }
 
     #[test]
@@ -242,8 +288,30 @@ mod tests {
     }
 
     #[test]
+    fn a_local_dependency_can_be_substituted_for_the_published_one() {
+        // Needed until btcpay-plugin is on crates.io: without it a scaffolded project cannot
+        // resolve its dependency, so the scaffolding cannot be tested at all.
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("my-plugin");
+        let mut s = spec(&target);
+        s.btcpay_plugin_path = Some(PathBuf::from("/checkout/crates/btcpay-plugin"));
+
+        create(&s).unwrap();
+
+        let cargo = std::fs::read_to_string(target.join("Cargo.toml")).unwrap();
+        assert!(
+            cargo.contains(r#"path = "/checkout/crates/btcpay-plugin""#),
+            "got: {cargo}"
+        );
+        assert!(!cargo.contains(r#"btcpay-plugin = "0.1""#));
+    }
+
+    #[test]
     fn suggestions_turn_a_crate_name_into_conventional_forms() {
-        assert_eq!(suggest_identifier("swap-monitor"), "BTCPayServer.Plugins.SwapMonitor");
+        assert_eq!(
+            suggest_identifier("swap-monitor"),
+            "BTCPayServer.Plugins.SwapMonitor"
+        );
         assert_eq!(suggest_display_name("swap-monitor"), "Swap Monitor");
     }
 }

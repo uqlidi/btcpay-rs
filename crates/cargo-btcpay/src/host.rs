@@ -136,10 +136,16 @@ mod tests {
         let layout = Layout::new(dir.path());
         let projects = materialise(&layout).unwrap();
 
-        let before = std::fs::metadata(&projects.core).unwrap().modified().unwrap();
+        let before = std::fs::metadata(&projects.core)
+            .unwrap()
+            .modified()
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
         materialise(&layout).unwrap();
-        let after = std::fs::metadata(&projects.core).unwrap().modified().unwrap();
+        let after = std::fs::metadata(&projects.core)
+            .unwrap()
+            .modified()
+            .unwrap();
 
         assert_eq!(before, after, "unchanged file should not be rewritten");
     }

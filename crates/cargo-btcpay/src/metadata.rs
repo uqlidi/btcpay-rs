@@ -51,9 +51,13 @@ pub fn read(library: &Path) -> Result<PluginMetadata, String> {
                     library.display()
                 )
             })?;
-        let free_fn: libloading::Symbol<FreeFn> = lib
-            .get(b"btcpay_rs_string_free")
-            .map_err(|e| format!("{} is missing btcpay_rs_string_free: {e}", library.display()))?;
+        let free_fn: libloading::Symbol<FreeFn> =
+            lib.get(b"btcpay_rs_string_free").map_err(|e| {
+                format!(
+                    "{} is missing btcpay_rs_string_free: {e}",
+                    library.display()
+                )
+            })?;
 
         let ptr = metadata_fn();
         if ptr.is_null() {
@@ -144,7 +148,10 @@ pub(crate) fn string_field(json: &str, name: &str) -> Option<String> {
 fn number_field(json: &str, name: &str) -> Option<u32> {
     let key = format!("\"{name}\":");
     let start = json.find(&key)? + key.len();
-    let digits: String = json[start..].chars().take_while(|c| c.is_ascii_digit()).collect();
+    let digits: String = json[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
     digits.parse().ok()
 }
 
@@ -187,6 +194,9 @@ mod tests {
         let json = r#"{"identifier":"A","version":"1","description":"d","abiVersion":1,"dependencies":[]}"#;
         let err = parse(json).expect_err("missing name should fail");
 
-        assert!(err.contains("name"), "error should name the missing field: {err}");
+        assert!(
+            err.contains("name"),
+            "error should name the missing field: {err}"
+        );
     }
 }
