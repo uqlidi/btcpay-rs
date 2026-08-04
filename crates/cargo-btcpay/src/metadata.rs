@@ -115,7 +115,7 @@ fn parse_dependencies(json: &str) -> Vec<Dependency> {
 
 /// Extracts `"name":"value"`, honouring backslash escapes so an escaped quote does not end
 /// the value early.
-fn string_field(json: &str, name: &str) -> Option<String> {
+pub(crate) fn string_field(json: &str, name: &str) -> Option<String> {
     let key = format!("\"{name}\":\"");
     let start = json.find(&key)? + key.len();
 

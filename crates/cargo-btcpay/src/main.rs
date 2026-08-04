@@ -1,10 +1,15 @@
 //! `cargo btcpay`: scaffold, inspect and generate the C# for BTCPay Server plugins written
 //! in Rust.
 
+mod build;
 mod config;
+mod docker;
+mod host;
 mod metadata;
 mod scaffold;
 mod shim;
+mod toolchain;
+mod workspace;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -58,6 +63,32 @@ enum Command {
         library: PathBuf,
     },
 
+    /// Compile the plugin and the C# that wraps it.
+    Build {
+        /// Plugin directory. Defaults to the current directory.
+        #[arg(long, default_value = ".")]
+        manifest_dir: PathBuf,
+
+        /// Build with optimisations.
+        #[arg(long)]
+        release: bool,
+    },
+
+    /// Build and assemble an installable .btcpay file.
+    Package {
+        /// Plugin directory. Defaults to the current directory.
+        #[arg(long, default_value = ".")]
+        manifest_dir: PathBuf,
+
+        /// Where to write the package.
+        #[arg(long, default_value = "artifacts")]
+        out: PathBuf,
+
+        /// Build inside a pinned container, so only Docker is needed locally.
+        #[arg(long)]
+        docker: bool,
+    },
+
     /// Generate the C# project for a compiled plugin library.
     ///
     /// Normally run for you by the build; useful on its own for inspecting the output.
@@ -81,6 +112,19 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Command::New { name, path, identifier, display_name, description } => {
             run_new(name, path, identifier, display_name, description)
+        }
+        Command::Build { manifest_dir, release } => {
+            build::build(&manifest_dir, release).map(|built| {
+                println!();
+                println!("Built {}", built.metadata.identifier);
+            })
+        }
+        Command::Package { manifest_dir, out, docker } => {
+            if docker {
+                docker::package(&manifest_dir, &out)
+            } else {
+                build::package(&manifest_dir, &out).map(|_| ())
+            }
         }
         Command::Inspect { library } => run_inspect(library),
         Command::Shim { library, out, manifest_dir } => run_shim(library, out, manifest_dir),

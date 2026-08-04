@@ -13,7 +13,7 @@ BTCPAY="${1:-../artifacts/BTCPayServer.Plugins.Hello/0.1.0.0/BTCPayServer.Plugin
 IDENTIFIER="$(basename "$BTCPAY" .btcpay)"
 
 if [ ! -f "$BTCPAY" ]; then
-  echo "error: $BTCPAY not found. Pack it first with dotnet/pack-plugin.sh." >&2
+  echo "error: $BTCPAY not found. Pack it first with: cargo btcpay package" >&2
   exit 1
 fi
 
