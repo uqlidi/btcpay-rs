@@ -32,7 +32,9 @@ pub struct Layout {
 
 impl Layout {
     pub fn new(plugin_dir: &Path) -> Self {
-        Self { root: plugin_dir.join("target/btcpay") }
+        Self {
+            root: plugin_dir.join("target/btcpay"),
+        }
     }
 
     /// The generated C# project wrapping this plugin.
@@ -63,7 +65,11 @@ pub fn run(what: &str, command: &mut Command) -> Result<String, String> {
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Build failures put the useful detail in one stream or the other depending on the
         // tool, so show whichever has content rather than guessing.
-        let detail = if stderr.trim().is_empty() { stdout } else { stderr };
+        let detail = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
         return Err(format!("{what} failed:\n{}", tail(&detail, 25)));
     }
 
@@ -117,7 +123,10 @@ mod tests {
         let shown = tail(&long, 25);
 
         assert!(shown.contains("line 60"), "the actual error is at the end");
-        assert!(!shown.contains("line 1\n"), "noise from the start is dropped");
+        assert!(
+            !shown.contains("line 1\n"),
+            "noise from the start is dropped"
+        );
     }
 
     /// Sets an environment variable for the duration of `f`.

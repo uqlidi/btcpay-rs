@@ -39,7 +39,10 @@ pub fn build(plugin_dir: &Path, release: bool) -> Result<Built, String> {
     // 2. What the plugin says it is. Everything downstream is derived from this, so the
     //    generated C# cannot disagree with the library it wraps.
     let md = metadata::read(&native_library)?;
-    println!("  {} {} (ABI {})", md.identifier, md.version, md.abi_version);
+    println!(
+        "  {} {} (ABI {})",
+        md.identifier, md.version, md.abi_version
+    );
 
     // 3. Host assemblies, written from this binary so no checkout of btcpay-rs is needed.
     let host_projects = host::materialise(&layout)?;
@@ -63,7 +66,11 @@ pub fn build(plugin_dir: &Path, release: bool) -> Result<Built, String> {
             .arg("build")
             .arg(&shim_project)
             .args(["-c", if release { "Release" } else { "Debug" }])
-            .args(msbuild_properties(&host_projects, &btcpayserver_project, &native_library))
+            .args(msbuild_properties(
+                &host_projects,
+                &btcpayserver_project,
+                &native_library,
+            ))
             .args(["--nologo", "-v", "quiet"]),
     )?;
 
@@ -132,7 +139,10 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<PathBuf, String> {
     let package = if package.exists() {
         package
     } else {
-        find_package(&out_dir.join(&built.metadata.identifier), &built.metadata.identifier)?
+        find_package(
+            &out_dir.join(&built.metadata.identifier),
+            &built.metadata.identifier,
+        )?
     };
 
     let size = std::fs::metadata(&package).map(|m| m.len()).unwrap_or(0);
@@ -257,10 +267,18 @@ fn strip_native_library(publish_dir: &Path) -> Result<(), String> {
     let before = std::fs::metadata(&library).map(|m| m.len()).unwrap_or(0);
 
     // Not fatal: a missing `strip` costs size, not correctness.
-    if Command::new("strip").arg(&library).status().is_ok_and(|s| s.success()) {
+    if Command::new("strip")
+        .arg(&library)
+        .status()
+        .is_ok_and(|s| s.success())
+    {
         let after = std::fs::metadata(&library).map(|m| m.len()).unwrap_or(0);
         if after > 0 && after < before {
-            println!("  stripped the library, {} KB to {} KB", before / 1024, after / 1024);
+            println!(
+                "  stripped the library, {} KB to {} KB",
+                before / 1024,
+                after / 1024
+            );
         }
     }
     Ok(())
@@ -268,8 +286,8 @@ fn strip_native_library(publish_dir: &Path) -> Result<(), String> {
 
 fn find_package(dir: &Path, identifier: &str) -> Result<PathBuf, String> {
     let wanted = format!("{identifier}.btcpay");
-    let versions = std::fs::read_dir(dir)
-        .map_err(|e| format!("could not read {}: {e}", dir.display()))?;
+    let versions =
+        std::fs::read_dir(dir).map_err(|e| format!("could not read {}: {e}", dir.display()))?;
 
     for version in versions.flatten() {
         let candidate = version.path().join(&wanted);
@@ -277,7 +295,10 @@ fn find_package(dir: &Path, identifier: &str) -> Result<PathBuf, String> {
             return Ok(candidate);
         }
     }
-    Err(format!("the packer did not produce {wanted} under {}", dir.display()))
+    Err(format!(
+        "the packer did not produce {wanted} under {}",
+        dir.display()
+    ))
 }
 
 fn msbuild_properties(

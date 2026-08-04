@@ -182,13 +182,18 @@ mod tests {
         assert!(cs.contains(r#"Identifier => "Acme.Plugins.Thing""#));
         assert!(cs.contains(r#"Name => "Thing""#));
         assert!(cs.contains(r#"Identifier = "BTCPayServer", Condition = ">=2.4.0""#));
-        assert!(cs.contains("RustPluginBase"), "must extend the host base class");
+        assert!(
+            cs.contains("RustPluginBase"),
+            "must extend the host base class"
+        );
     }
 
     #[test]
     fn generated_files_are_marked_as_generated() {
         let md = sample();
-        let config = Config { build: Default::default() };
+        let config = Config {
+            build: Default::default(),
+        };
 
         assert!(plugin_cs(&md).starts_with("// GENERATED"));
         assert!(csproj(&md, &config).contains("GENERATED"));
@@ -199,7 +204,12 @@ mod tests {
         let mut md = sample();
         md.description = "Bread & butter <tags>".into();
 
-        let xml = csproj(&md, &Config { build: Default::default() });
+        let xml = csproj(
+            &md,
+            &Config {
+                build: Default::default(),
+            },
+        );
 
         assert!(xml.contains("Bread &amp; butter &lt;tags&gt;"));
         assert!(!xml.contains("Bread & butter"));
@@ -220,7 +230,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let md = sample();
 
-        generate(&md, &Config { build: Default::default() }, dir.path()).unwrap();
+        generate(
+            &md,
+            &Config {
+                build: Default::default(),
+            },
+            dir.path(),
+        )
+        .unwrap();
 
         assert!(dir.path().join("Acme.Plugins.Thing.csproj").exists());
         assert!(dir.path().join("Plugin.cs").exists());

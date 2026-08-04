@@ -55,6 +55,11 @@ enum Command {
         /// One-line description.
         #[arg(long, default_value = "A BTCPay Server plugin written in Rust.")]
         description: String,
+
+        /// Depend on a local btcpay-plugin checkout rather than the published crate.
+        /// For testing this repository against itself; not for normal use.
+        #[arg(long, hide = true)]
+        dev_path: Option<PathBuf>,
     },
 
     /// Print what a compiled plugin library reports about itself.
@@ -110,16 +115,26 @@ fn main() -> ExitCode {
     let Cargo::Btcpay(cli) = Cargo::parse();
 
     let result = match cli.command {
-        Command::New { name, path, identifier, display_name, description } => {
-            run_new(name, path, identifier, display_name, description)
-        }
-        Command::Build { manifest_dir, release } => {
-            build::build(&manifest_dir, release).map(|built| {
-                println!();
-                println!("Built {}", built.metadata.identifier);
-            })
-        }
-        Command::Package { manifest_dir, out, docker } => {
+        Command::New {
+            name,
+            path,
+            identifier,
+            display_name,
+            description,
+            dev_path,
+        } => run_new(name, path, identifier, display_name, description, dev_path),
+        Command::Build {
+            manifest_dir,
+            release,
+        } => build::build(&manifest_dir, release).map(|built| {
+            println!();
+            println!("Built {}", built.metadata.identifier);
+        }),
+        Command::Package {
+            manifest_dir,
+            out,
+            docker,
+        } => {
             if docker {
                 docker::package(&manifest_dir, &out)
             } else {
@@ -127,7 +142,11 @@ fn main() -> ExitCode {
             }
         }
         Command::Inspect { library } => run_inspect(library),
-        Command::Shim { library, out, manifest_dir } => run_shim(library, out, manifest_dir),
+        Command::Shim {
+            library,
+            out,
+            manifest_dir,
+        } => run_shim(library, out, manifest_dir),
     };
 
     match result {
@@ -145,6 +164,7 @@ fn run_new(
     identifier: Option<String>,
     display_name: Option<String>,
     description: String,
+    dev_path: Option<PathBuf>,
 ) -> Result<(), String> {
     let spec = NewPlugin {
         directory: path.unwrap_or_else(|| scaffold::default_directory(&name)),
@@ -152,11 +172,16 @@ fn run_new(
         display_name: display_name.unwrap_or_else(|| scaffold::suggest_display_name(&name)),
         crate_name: name,
         description,
+        btcpay_plugin_path: dev_path,
     };
 
     let files = scaffold::create(&spec)?;
 
-    println!("Created {} in {}", spec.identifier, spec.directory.display());
+    println!(
+        "Created {} in {}",
+        spec.identifier,
+        spec.directory.display()
+    );
     for file in &files {
         println!("  {}", file.display());
     }
@@ -197,7 +222,11 @@ fn run_shim(library: PathBuf, out: PathBuf, manifest_dir: PathBuf) -> Result<(),
 
     shim::generate(&md, &config, &out)?;
 
-    println!("Generated the C# project for {} in {}", md.identifier, out.display());
+    println!(
+        "Generated the C# project for {} in {}",
+        md.identifier,
+        out.display()
+    );
     println!("  {}.csproj", md.identifier);
     println!("  Plugin.cs");
     Ok(())

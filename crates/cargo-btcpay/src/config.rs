@@ -58,12 +58,29 @@ impl Config {
     pub fn load(dir: &Path) -> Result<Self, String> {
         let path = dir.join("btcpay.toml");
         if !path.exists() {
-            return Ok(Self { build: Build::default() });
+            return Ok(Self {
+                build: Build::default(),
+            });
         }
 
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-        toml::from_str(&text).map_err(|e| format!("{} is not valid: {e}", path.display()))
+        let mut config: Self =
+            toml::from_str(&text).map_err(|e| format!("{} is not valid: {e}", path.display()))?;
+        config.apply_overrides();
+        Ok(config)
+    }
+
+    /// Applies environment overrides.
+    ///
+    /// `BTCPAY_RS_BTCPAY_TAG` exists so compatibility testing can build a plugin against a
+    /// BTCPay version other than the one it pins, without editing a file the plugin owns.
+    fn apply_overrides(&mut self) {
+        if let Ok(tag) = std::env::var("BTCPAY_RS_BTCPAY_TAG") {
+            if !tag.trim().is_empty() {
+                self.build.btcpay_tag = tag;
+            }
+        }
     }
 }
 
@@ -92,7 +109,42 @@ mod tests {
         let config = Config::load(dir.path()).unwrap();
 
         assert_eq!(config.build.btcpay_tag, "v2.5.0");
-        assert_eq!(config.build.targets, vec!["linux-x64"], "unset keys keep their default");
+        assert_eq!(
+            config.build.targets,
+            vec!["linux-x64"],
+            "unset keys keep their default"
+        );
+    }
+
+    #[test]
+    fn the_btcpay_version_can_be_overridden_for_compatibility_testing() {
+        // Lets CI build a plugin against a BTCPay version other than the one it pins,
+        // without editing a file the plugin owns.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("btcpay.toml"),
+            "[build]\nbtcpay_tag = \"v2.4.1\"\n",
+        )
+        .unwrap();
+
+        temp_env_var("BTCPAY_RS_BTCPAY_TAG", "v2.5.0", || {
+            assert_eq!(Config::load(dir.path()).unwrap().build.btcpay_tag, "v2.5.0");
+        });
+
+        // and does not linger once unset
+        assert_eq!(Config::load(dir.path()).unwrap().build.btcpay_tag, "v2.4.1");
+    }
+
+    /// Sets an environment variable for the duration of `f`, restoring it afterwards: tests
+    /// in a binary share one process.
+    fn temp_env_var(key: &str, value: &str, f: impl FnOnce()) {
+        let previous = std::env::var_os(key);
+        unsafe { std::env::set_var(key, value) };
+        f();
+        match previous {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
+        }
     }
 
     #[test]
@@ -107,6 +159,9 @@ mod tests {
         .unwrap();
 
         let err = Config::load(dir.path()).expect_err("unknown key should be rejected");
-        assert!(err.contains("btcpay_version"), "error should name the key: {err}");
+        assert!(
+            err.contains("btcpay_version"),
+            "error should name the key: {err}"
+        );
     }
 }

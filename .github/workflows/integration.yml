@@ -1,0 +1,104 @@
+name: Integration
+
+# The only test that proves the whole chain: Rust source, through the generated C#, into a
+# real BTCPay Server. It is what would have caught the empty bindings file and the mangled
+# packer arguments, both of which passed every unit test.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UNIFFI_BINDGEN_CS_TAG: v0.11.0+v0.31.0
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  package-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: integration
+
+      - name: Cache the binding generator
+        id: bindgen-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/uniffi-bindgen-cs
+          key: bindgen-${{ env.UNIFFI_BINDGEN_CS_TAG }}
+
+      - name: Install the binding generator
+        if: steps.bindgen-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install uniffi-bindgen-cs \
+            --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+            --tag "$UNIFFI_BINDGEN_CS_TAG"
+
+      # Holds the BTCPay checkout and the built packer. Cold, this costs several minutes:
+      # BTCPayServer.Abstractions is not on NuGet, so the C# compiles against source.
+      - name: Cache the BTCPay checkout and packer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/btcpay-rs
+          key: btcpay-checkout-${{ hashFiles('examples/hello-plugin/btcpay.toml') }}
+          restore-keys: btcpay-checkout-
+
+      - name: Package the example plugin
+        run: |
+          cargo build --release -p cargo-btcpay
+          ./target/release/cargo-btcpay btcpay package \
+            --manifest-dir examples/hello-plugin --out artifacts
+
+      - name: The package contains what BTCPay needs
+        run: |
+          PKG=$(find artifacts -name '*.btcpay' | head -1)
+          test -n "$PKG" || { echo "no .btcpay was produced"; exit 1; }
+          echo "packaged: $PKG ($(du -h "$PKG" | cut -f1))"
+          # The native library must sit flat at the root: BTCPay's load context resolves
+          # natives from deps.json, which a copied file never populates, so a package with it
+          # under runtimes/ would install and then fail to load.
+          unzip -l "$PKG" | grep -q 'libbtcpay_plugin_native.so' \
+            || { echo "the native library is missing from the package"; exit 1; }
+          for required in BTCPayServer.Plugins.Hello.dll BtcpayRs.Host.dll BtcpayRs.Host.BTCPay.dll; do
+            unzip -l "$PKG" | grep -q "$required" || { echo "missing $required"; exit 1; }
+          done
+
+      - name: Install the plugin and start BTCPay
+        run: ./dev/run-btcpay.sh "$(find "$PWD/artifacts" -name '*.btcpay' | head -1)"
+
+      - name: The plugin runs inside BTCPay
+        run: ./dev/assert-plugin-loaded.sh BTCPayServer.Plugins.Hello Hello
+
+      - name: Restarting stops and restarts it cleanly
+        run: |
+          docker compose -f dev/docker-compose.yml restart btcpayserver
+          ./dev/assert-plugin-loaded.sh BTCPayServer.Plugins.Hello Hello
+          docker compose -f dev/docker-compose.yml logs btcpayserver 2>&1 \
+            | sed 's/\x1b\[[0-9;]*m//g' \
+            | grep -q 'BTCPayServer.Plugins.Hello\] stopped' \
+            || { echo "the plugin never reported a clean shutdown"; exit 1; }
+
+      # Logs are the only diagnostic when this fails on a runner nobody can attach to.
+      - name: BTCPay logs
+        if: always()
+        run: docker compose -f dev/docker-compose.yml logs --tail 200 btcpayserver
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f dev/docker-compose.yml down -v

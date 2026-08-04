@@ -1,0 +1,130 @@
+name: BTCPay compatibility
+
+# The framework's defining risk is a host nobody here controls. BTCPay can rename an event,
+# change how PluginManager loads assemblies, or move Abstractions, and none of it shows up in
+# our own tests because they build against a pinned checkout.
+#
+# This runs the full chain against the pinned version and the newest release, so a breaking
+# change upstream is discovered on a schedule rather than by a user.
+on:
+  schedule:
+    # 04:00 UTC daily, well clear of working hours in most timezones.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      btcpay_tag:
+        description: "A single BTCPay tag to test, e.g. v2.5.0"
+        required: false
+
+env:
+  UNIFFI_BINDGEN_CS_TAG: v0.11.0+v0.31.0
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  # Which versions to test. The newest release is discovered rather than hardcoded, so this
+  # keeps working as BTCPay releases without anyone editing the workflow.
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.resolve.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.btcpay_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$REQUESTED" ]; then
+            echo "tags=[\"$REQUESTED\"]" >> "$GITHUB_OUTPUT"
+            echo "testing only the requested tag: $REQUESTED"
+            exit 0
+          fi
+
+          pinned=$(grep -oP 'btcpay_tag = "\K[^"]+' examples/hello-plugin/btcpay.toml)
+          latest=$(gh api repos/btcpayserver/btcpayserver/releases/latest --jq .tag_name)
+          echo "pinned: $pinned"
+          echo "latest: $latest"
+
+          if [ "$pinned" = "$latest" ]; then
+            echo "tags=[\"$pinned\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=[\"$pinned\",\"$latest\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  compat:
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      # One version failing should not hide the result for the other.
+      fail-fast: false
+      matrix:
+        btcpay_tag: ${{ fromJSON(needs.versions.outputs.tags) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: compat-${{ matrix.btcpay_tag }}
+
+      - name: Cache the binding generator
+        id: bindgen-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/uniffi-bindgen-cs
+          key: bindgen-${{ env.UNIFFI_BINDGEN_CS_TAG }}
+
+      - name: Install the binding generator
+        if: steps.bindgen-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install uniffi-bindgen-cs \
+            --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+            --tag "$UNIFFI_BINDGEN_CS_TAG"
+
+      # Deliberately not cached across versions: each tag needs its own checkout, and a stale
+      # one would silently test the wrong BTCPay.
+      - name: Package against BTCPay ${{ matrix.btcpay_tag }}
+        env:
+          BTCPAY_RS_BTCPAY_TAG: ${{ matrix.btcpay_tag }}
+        run: |
+          cargo build --release -p cargo-btcpay
+          ./target/release/cargo-btcpay btcpay package \
+            --manifest-dir examples/hello-plugin --out artifacts
+
+      # The running server must match what the plugin was compiled against; the plugin's own
+      # dependency condition would otherwise refuse it. The image tag drops the leading v.
+      - name: Run it against BTCPay ${{ matrix.btcpay_tag }}
+        env:
+          BTCPAY_VERSION: ${{ matrix.btcpay_tag }}
+        run: |
+          export BTCPAY_VERSION="${BTCPAY_VERSION#v}"
+          echo "running btcpayserver/btcpayserver:$BTCPAY_VERSION"
+          ./dev/run-btcpay.sh "$(find "$PWD/artifacts" -name '*.btcpay' | head -1)"
+          ./dev/assert-plugin-loaded.sh BTCPayServer.Plugins.Hello Hello
+
+      - name: BTCPay logs
+        if: always()
+        env:
+          BTCPAY_VERSION: ${{ matrix.btcpay_tag }}
+        run: |
+          export BTCPAY_VERSION="${BTCPAY_VERSION#v}"
+          docker compose -f dev/docker-compose.yml logs --tail 200 btcpayserver
+
+      - name: Tear down
+        if: always()
+        env:
+          BTCPAY_VERSION: ${{ matrix.btcpay_tag }}
+        run: |
+          export BTCPAY_VERSION="${BTCPAY_VERSION#v}"
+          docker compose -f dev/docker-compose.yml down -v
