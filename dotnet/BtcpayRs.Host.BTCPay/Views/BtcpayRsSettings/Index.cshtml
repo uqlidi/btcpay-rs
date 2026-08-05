@@ -1,0 +1,216 @@
+@model SettingsPageModel
+@*
+    Renders whatever page a plugin described. One view for every btcpay-rs plugin: the
+    content comes from the plugin, the markup and styling from here, so a plugin author
+    writes no Razor and the result matches the rest of BTCPay.
+
+    Every value below goes through Razor's @ expressions, which HTML-encode. A plugin cannot
+    put markup into this page: the model carries data, never HTML.
+*@
+@{
+    var title = string.IsNullOrWhiteSpace(Model.Page.Title) ? Model.PluginName : Model.Page.Title;
+    ViewData.SetLayoutModel(new LayoutModel(nameof(ServerNavPages.Services), title)
+        .SetCategory(WellKnownCategories.Server));
+}
+
+<div class="sticky-header">
+    <h2 class="my-1">@title</h2>
+</div>
+
+<partial name="_StatusMessage" />
+
+@if (Model.Page.IsNewerThanSupported)
+{
+    @* A plugin built against a newer btcpay-rs. Say so rather than rendering it wrongly. *@
+    <div class="alert alert-warning" role="alert">
+        This plugin was built for a newer version of btcpay-rs than this server understands.
+        Parts of this page may be missing. Updating BTCPay Server should resolve it.
+    </div>
+}
+
+@if (!ViewContext.ModelState.IsValid)
+{
+    <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+            @foreach (var error in ViewContext.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <li>@error.ErrorMessage</li>
+            }
+        </ul>
+    </div>
+}
+
+<div class="row">
+    <div class="col-xxl-constrain col-xl-8">
+        @foreach (var section in Model.Page.Sections)
+        {
+            switch (section)
+            {
+                case UiSection.Text text:
+                    <p class="text-secondary">@text.Value</p>
+                    break;
+
+                case UiSection.Alert alert:
+                    <div class="alert alert-@AlertClass(alert.Level)" role="alert">@alert.Message</div>
+                    break;
+
+                case UiSection.Stats stats:
+                    <div class="row g-3 mb-4">
+                        @foreach (var card in stats.Cards)
+                        {
+                            <div class="col-sm-6 col-lg-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="text-secondary text-uppercase small mb-2">@card.Label</h6>
+                                        <div class="h4 mb-0">@card.Value</div>
+                                        @if (card.Detail is not null)
+                                        {
+                                            <div class="text-secondary small mt-1">@card.Detail</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    break;
+
+                case UiSection.Table table:
+                    @if (table.Title is not null)
+                    {
+                        <h4 class="mt-4 mb-3">@table.Title</h4>
+                    }
+                    @if (table.Rows.Count == 0)
+                    {
+                        <p class="text-secondary">@(table.EmptyMessage ?? "Nothing to show yet.")</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in table.Columns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in table.Rows)
+                                    {
+                                        <tr>
+                                            @for (var i = 0; i < table.Columns.Count; i++)
+                                            {
+                                                @* Padded rather than assumed square: the row comes from a plugin. *@
+                                                <td>@(i < row.Count ? row[i] : string.Empty)</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    break;
+
+                case UiSection.Form form:
+                    <form method="post" class="mb-4">
+                        <input type="hidden" name="formId" value="@form.Id" />
+                        @if (form.Title is not null)
+                        {
+                            <h4 class="mt-4 mb-3">@form.Title</h4>
+                        }
+
+                        @foreach (var field in form.Fields)
+                        {
+                            <div class="form-group">
+                                @if (field.Kind == "toggle")
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="@field.Id"
+                                               name="@field.Id" value="true" checked="@Model.IsOn(field)" />
+                                        <label class="form-check-label" for="@field.Id">@field.Label</label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="form-label" for="@field.Id">
+                                        @field.Label
+                                        @if (field.Required)
+                                        {
+                                            <span class="text-danger">*</span>
+                                        }
+                                    </label>
+
+                                    switch (field.Kind)
+                                    {
+                                        case "select":
+                                            <select class="form-select" id="@field.Id" name="@field.Id">
+                                                @foreach (var option in field.Options)
+                                                {
+                                                    <option value="@option.Value"
+                                                            selected="@(Model.ValueFor(field) == option.Value)">
+                                                        @option.Label
+                                                    </option>
+                                                }
+                                            </select>
+                                            break;
+
+                                        case "password":
+                                            @* No value is rendered: the stored secret never reaches the browser.
+                                               Submitting this empty keeps whatever is stored. *@
+                                            <input type="password" class="form-control" id="@field.Id"
+                                                   name="@field.Id" autocomplete="new-password"
+                                                   placeholder="Leave blank to keep the current value" />
+                                            break;
+
+                                        case "number":
+                                            <input type="number" class="form-control" id="@field.Id"
+                                                   name="@field.Id" value="@Model.ValueFor(field)"
+                                                   min="@(field.Min?.ToString() ?? "")"
+                                                   max="@(field.Max?.ToString() ?? "")" />
+                                            break;
+
+                                        default:
+                                            @* Anything this host does not know renders as text, so a field
+                                               from a newer btcpay-rs is still editable rather than lost. *@
+                                            <input type="text" class="form-control" id="@field.Id"
+                                                   name="@field.Id" value="@Model.ValueFor(field)"
+                                                   placeholder="@(field.Placeholder ?? "")" />
+                                            break;
+                                    }
+                                }
+
+                                @if (field.Help is not null)
+                                {
+                                    <div class="form-text">@field.Help</div>
+                                }
+                            </div>
+                        }
+
+                        <button type="submit" class="btn btn-primary mt-3">@form.SubmitLabel</button>
+                    </form>
+                    break;
+
+                case UiSection.Unknown unknown:
+                    @* Kept visible so a missing block is explained rather than silently absent. *@
+                    <div class="alert alert-secondary" role="alert">
+                        This plugin includes a <code>@unknown.Type</code> section that this version of
+                        BTCPay Server cannot display.
+                    </div>
+                    break;
+            }
+        }
+    </div>
+</div>
+
+@functions {
+    // Maps the plugin's level onto Bootstrap's, refusing anything unrecognised so a crafted
+    // level cannot inject a class name.
+    static string AlertClass(string level) => level switch
+    {
+        "success" => "success",
+        "warning" => "warning",
+        "danger" => "danger",
+        _ => "info",
+    };
+}

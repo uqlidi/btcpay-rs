@@ -25,6 +25,28 @@ impl btcpay_plugin::Plugin for Plugin {
         *self.host.lock().unwrap() = None;
     }
 
+    /// Describe a settings page. The host renders it with BTCPay's own styles, so there is
+    /// no HTML or Razor to write. Delete this method if the plugin has nothing to configure:
+    /// the page then does not appear at all.
+    fn settings_schema(&self) -> UiDocument {
+        let stored = self
+            .host
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|h| h.get_setting("example".to_string()))
+            .unwrap_or_default();
+
+        Document::new("{{display_name}}")
+            .form(
+                Form::new("settings")
+                    .text("example", "An example setting")
+                    .help("Shown on the plugin's settings page in BTCPay.")
+                    .value(stored),
+            )
+            .into()
+    }
+
     /// React to something that happened in BTCPay, and ask the host to do things in return.
     fn handle(&self, event: HostEvent) -> Result<Vec<PluginAction>, PluginError> {
         Ok(match event {

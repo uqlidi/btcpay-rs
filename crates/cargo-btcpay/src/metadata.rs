@@ -15,6 +15,9 @@ pub struct PluginMetadata {
     pub version: String,
     pub description: String,
     pub abi_version: u32,
+    /// Whether the plugin describes a settings page. When it does not, no controller and no
+    /// menu entry are generated, so the plugin has no empty page to stumble into.
+    pub has_settings_page: bool,
     pub dependencies: Vec<Dependency>,
 }
 
@@ -93,6 +96,9 @@ fn parse(json: &str) -> Result<PluginMetadata, String> {
         version: field("version")?,
         description: field("description")?,
         abi_version,
+        // Absent in libraries built before this flag existed; assume no page rather than
+        // generating a route that leads nowhere.
+        has_settings_page: json.contains(r#""hasSettingsPage":true"#),
         dependencies: parse_dependencies(json),
     })
 }

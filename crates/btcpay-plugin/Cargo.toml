@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 uniffi.workspace = true
+btcpay-ui.workspace = true
 thiserror = "2"
 ctor = "0.2"
 btcpay-plugin-macros.workspace = true

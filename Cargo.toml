@@ -2,6 +2,7 @@
 members = [
     "crates/btcpay-plugin",
     "crates/btcpay-plugin-macros",
+    "crates/btcpay-ui",
     "crates/cargo-btcpay",
     "examples/hello-plugin",
 ]
@@ -19,6 +20,7 @@ rust-version = "1.88"
 uniffi = "0.31.0"
 btcpay-plugin = { path = "crates/btcpay-plugin", version = "0.1.0" }
 btcpay-plugin-macros = { path = "crates/btcpay-plugin-macros", version = "0.1.0" }
+btcpay-ui = { path = "crates/btcpay-ui", version = "0.1.0" }
 
 # Keep bindings generation working: `uniffi-bindgen-cs --library` reads metadata from the
 # .so's symbols, and a stripped library makes it exit 0 while producing NOTHING. Strip at

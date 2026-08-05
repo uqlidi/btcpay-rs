@@ -58,6 +58,9 @@ pub use handle::register_plugin;
 
 pub use btcpay_plugin_macros::plugin;
 
+/// Describe a settings page or dashboard as data. See [`btcpay_ui`].
+pub use btcpay_ui as ui;
+
 /// Everything a typical plugin needs, in one import.
 pub mod prelude {
     pub use crate::UiDocument;
@@ -66,6 +69,7 @@ pub mod prelude {
         LogLevel, Notification, Plugin, PluginAction, PluginDependency, PluginError, PluginEvent,
         PluginMetadata, WebhookRequest,
     };
+    pub use btcpay_ui::{AlertLevel, Document, Form, Stats, Table};
     pub use std::sync::Arc;
 }
 
