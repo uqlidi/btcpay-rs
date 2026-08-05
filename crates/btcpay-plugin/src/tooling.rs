@@ -38,13 +38,25 @@ pub extern "C" fn btcpay_rs_metadata_json() -> *mut c_char {
             .collect::<Vec<_>>()
             .join(",");
 
+        // Whether the plugin describes a settings page, so the build can skip generating a
+        // controller and a menu entry for a plugin that has nothing to configure.
+        //
+        // Asked without a host, since none exists at build time. A plugin that describes
+        // sections only once configured will look as though it has no page; such a plugin
+        // should return its form unconditionally and fill in values when it can.
+        let has_settings_page =
+            btcpay_ui::Document::from_json(&factory().settings_schema().document_json)
+                .map(|document| !document.is_empty())
+                .unwrap_or(false);
+
         Some(format!(
-            r#"{{"identifier":{},"name":{},"version":{},"description":{},"abiVersion":{},"dependencies":[{}]}}"#,
+            r#"{{"identifier":{},"name":{},"version":{},"description":{},"abiVersion":{},"hasSettingsPage":{},"dependencies":[{}]}}"#,
             quote(&metadata.identifier),
             quote(&metadata.name),
             quote(&metadata.version),
             quote(&metadata.description),
             crate::ABI_VERSION,
+            has_settings_page,
             dependencies
         ))
     });

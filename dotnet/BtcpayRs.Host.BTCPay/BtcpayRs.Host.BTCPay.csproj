@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,6 +9,11 @@
     <RootNamespace>BtcpayRs.Host.BTCPay</RootNamespace>
     <AssemblyName>BtcpayRs.Host.BTCPay</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The generic settings views live here and are compiled into this assembly. A plugin
+         finds them because its generated assembly declares [assembly: RelatedAssembly].
+         This needs the Razor SDK above: with plain Microsoft.NET.Sdk the Razor targets never
+         run, the .cshtml files are ignored, and the page 404s looking for its view. -->
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <NoWarn>$(NoWarn);CS1591;CS8632;CS0618</NoWarn>
   </PropertyGroup>
 

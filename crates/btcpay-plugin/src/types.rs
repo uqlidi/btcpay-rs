@@ -140,6 +140,20 @@ pub enum HostEvent {
         trigger: InvoiceTrigger,
     },
     /// The operator saved the settings form.
+    ///
+    /// The values are the submission, already checked against the form the plugin described.
+    ///
+    /// Two things to know:
+    ///
+    /// - **Read them from here, not from storage.** The host performs the actions this
+    ///   handler returns only after it returns, so [`HostServices::get_setting`] still
+    ///   reports the previous values while handling this event.
+    /// - **Apply them to any in-memory state now.** A plugin that only reads its settings in
+    ///   [`crate::Plugin::start`] will appear to save them while continuing to use the old
+    ///   ones until BTCPay restarts.
+    ///
+    /// Returning [`PluginAction::SaveSettings`] is what actually persists them; returning
+    /// nothing, or an error, rejects the submission and leaves the stored values alone.
     SettingsUpdated {
         /// The submitted settings, keyed by field id.
         values: HashMap<String, String>,
@@ -241,35 +255,38 @@ pub const UI_VERSION: u32 = 1;
 
 /// A renderable description of a plugin's UI, rendered by generic Razor views in the host.
 ///
-/// **Placeholder shape.** The node vocabulary (forms, fields, tables, stat cards, alerts) and
-/// the `#[derive(BtcpaySettings)]` macro land with the declarative-UI milestone; until then
-/// sections travel as opaque JSON so the vocabulary can be designed without churning the FFI
-/// contract. `ui_version` is present from day one so that change is additive.
+/// Build one with [`btcpay_ui::Document`] and convert; this type is only the envelope that
+/// crosses the FFI. The page itself travels as JSON in [`UiDocument::document_json`] rather
+/// than as generated types, so adding a node kind is something the host can degrade over
+/// instead of an ABI break that forces every plugin to be rebuilt.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct UiDocument {
     /// Always [`UI_VERSION`] for documents built by this crate.
     pub ui_version: u32,
     /// Heading shown above the rendered content.
     pub title: String,
-    /// Sections to render, as a JSON array.
-    pub sections_json: String,
+    /// The page, as JSON. See [`btcpay_ui::Document`] for its shape.
+    pub document_json: String,
 }
 
 impl UiDocument {
     /// A document with no content: the default for plugins that expose no settings.
     pub fn empty() -> Self {
-        Self {
-            ui_version: UI_VERSION,
-            title: String::new(),
-            sections_json: "[]".to_string(),
-        }
+        Self::from(btcpay_ui::Document::empty())
     }
 
     /// A titled but otherwise empty document.
     pub fn new(title: impl Into<String>) -> Self {
+        Self::from(btcpay_ui::Document::new(title))
+    }
+}
+
+impl From<btcpay_ui::Document> for UiDocument {
+    fn from(document: btcpay_ui::Document) -> Self {
         Self {
-            title: title.into(),
-            ..Self::empty()
+            ui_version: UI_VERSION,
+            title: document.title.clone(),
+            document_json: document.to_json(),
         }
     }
 }

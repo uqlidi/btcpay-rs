@@ -38,6 +38,10 @@ const HOST_FILES: &[Embedded] = &[
         contents: include_str!("../../../dotnet/BtcpayRs.Host/RustPluginRuntime.cs"),
     },
     Embedded {
+        relative_path: "BtcpayRs.Host/UiPage.cs",
+        contents: include_str!("../../../dotnet/BtcpayRs.Host/UiPage.cs"),
+    },
+    Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj",
         contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj"),
     },
@@ -52,6 +56,33 @@ const HOST_FILES: &[Embedded] = &[
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/SettingsRepositoryBackend.cs",
         contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/SettingsRepositoryBackend.cs"),
+    },
+    Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/RustPluginSettingsControllerBase.cs",
+        contents: include_str!(
+            "../../../dotnet/BtcpayRs.Host.BTCPay/RustPluginSettingsControllerBase.cs"
+        ),
+    },
+    // The generic settings views, compiled into BtcpayRs.Host.BTCPay.
+    Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/Views/_ViewImports.cshtml",
+        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewImports.cshtml"),
+    },
+    Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/Views/_ViewStart.cshtml",
+        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewStart.cshtml"),
+    },
+    Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/Views/Shared/_BtcpayRsServerNav.cshtml",
+        contents: include_str!(
+            "../../../dotnet/BtcpayRs.Host.BTCPay/Views/Shared/_BtcpayRsServerNav.cshtml"
+        ),
+    },
+    Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/Views/BtcpayRsSettings/Index.cshtml",
+        contents: include_str!(
+            "../../../dotnet/BtcpayRs.Host.BTCPay/Views/BtcpayRsSettings/Index.cshtml"
+        ),
     },
 ];
 
@@ -112,6 +143,66 @@ mod tests {
                 file.relative_path
             );
         }
+    }
+
+    #[test]
+    fn every_host_source_in_the_repository_is_embedded() {
+        // A file added to dotnet/ but not to HOST_FILES is invisible to plugin builds, and
+        // the failure surfaces as a missing type in a generated project rather than here.
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../dotnet")
+            .canonicalize()
+            .expect("the dotnet directory should exist");
+
+        let embedded: std::collections::HashSet<&str> =
+            HOST_FILES.iter().map(|f| f.relative_path).collect();
+
+        let mut missing = Vec::new();
+        for project in ["BtcpayRs.Host", "BtcpayRs.Host.BTCPay"] {
+            for entry in walk(&repo.join(project)) {
+                let relative = entry
+                    .strip_prefix(&repo)
+                    .expect("under the dotnet directory")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if !embedded.contains(relative.as_str()) {
+                    missing.push(relative);
+                }
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "these host sources are not embedded, so plugin builds cannot see them: {missing:#?}"
+        );
+    }
+
+    /// Every source file under `dir`, ignoring build output and generated bindings.
+    fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut found = Vec::new();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return found;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+
+            if path.is_dir() {
+                // bin/obj are build output; Generated holds the bindings, which are produced
+                // per plugin rather than embedded.
+                if !matches!(name.as_ref(), "bin" | "obj" | "Generated") {
+                    found.extend(walk(&path));
+                }
+            } else if matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("cs") | Some("csproj") | Some("cshtml")
+            ) {
+                found.push(path);
+            }
+        }
+        found
     }
 
     #[test]

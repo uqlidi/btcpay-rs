@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using uniffi.btcpay;
 using Xunit;
 
@@ -160,6 +161,63 @@ public sealed class RuntimeTests
     }
 
     [Fact]
+    public void Changing_a_setting_takes_effect_on_the_running_plugin()
+    {
+        // Persisting a value is not enough: a plugin that only reads its settings at startup
+        // would look saved while continuing to use the old value until BTCPay restarts.
+        var (runtime, backend, logger) = Build();
+        using var _r = runtime;
+        backend.Settings["greeting"] = "before";
+        runtime.Start(Anchor);
+
+        var invoice = new InvoiceSummary("inv-1", "store-1", "Settled", "1.00", "USD");
+        runtime.Dispatch(new HostEvent.InvoiceStatusChanged(invoice, new InvoiceTrigger.Confirmed()));
+        Assert.Contains(logger.Entries, e => e.Message.Contains("before: invoice inv-1"));
+
+        runtime.Dispatch(new HostEvent.SettingsUpdated(
+            new Dictionary<string, string> { ["greeting"] = "after" }));
+
+        // The same event now reports the new greeting, with no restart in between.
+        runtime.Dispatch(new HostEvent.InvoiceStatusChanged(invoice, new InvoiceTrigger.Confirmed()));
+        Assert.Contains(logger.Entries, e => e.Message.Contains("after: invoice inv-1"));
+        Assert.Equal("after", backend.Settings["greeting"]);
+    }
+
+    [Fact]
+    public void A_rejected_settings_change_leaves_the_running_plugin_alone()
+    {
+        // A submission the plugin refuses must not half-apply: neither stored nor in effect.
+        var (runtime, backend, logger) = Build();
+        using var _r = runtime;
+        backend.Settings["greeting"] = "kept";
+        runtime.Start(Anchor);
+
+        runtime.Dispatch(new HostEvent.SettingsUpdated(
+            new Dictionary<string, string> { ["greeting"] = "   " }));
+
+        Assert.Equal("kept", backend.Settings["greeting"]);
+
+        var invoice = new InvoiceSummary("inv-2", "store-1", "Settled", "1.00", "USD");
+        runtime.Dispatch(new HostEvent.InvoiceStatusChanged(invoice, new InvoiceTrigger.Confirmed()));
+        Assert.Contains(logger.Entries, e => e.Message.Contains("kept: invoice inv-2"));
+    }
+
+    [Fact]
+    public void A_saved_setting_is_reflected_in_the_form_the_operator_sees_next()
+    {
+        var (runtime, _, _) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        runtime.Dispatch(new HostEvent.SettingsUpdated(
+            new Dictionary<string, string> { ["greeting"] = "round tripped" }));
+
+        var page = UiPage.Parse(runtime.SettingsSchema()!.DocumentJson);
+        var greeting = page.FormById("settings")!.Fields.First(f => f.Id == "greeting");
+        Assert.Equal("round tripped", greeting.Value);
+    }
+
+    [Fact]
     public void The_settings_schema_can_be_requested_for_rendering()
     {
         var (runtime, _, _) = Build();
@@ -170,5 +228,53 @@ public sealed class RuntimeTests
 
         Assert.NotNull(doc);
         Assert.Equal(1u, doc!.UiVersion);
+        Assert.Equal("Hello", doc.Title);
+    }
+
+    [Fact]
+    public void The_settings_schema_carries_a_page_the_host_can_render()
+    {
+        // The page crosses the boundary as JSON rather than generated types, so this is
+        // where a mismatch between what Rust writes and what the host expects would show up.
+        var (runtime, _, _) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        using var page = JsonDocument.Parse(runtime.SettingsSchema()!.DocumentJson);
+        var root = page.RootElement;
+
+        Assert.Equal(1, root.GetProperty("wireVersion").GetInt32());
+
+        var sections = root.GetProperty("sections").EnumerateArray().ToList();
+        Assert.Contains(sections, s => s.GetProperty("type").GetString() == "form");
+
+        var form = sections.First(s => s.GetProperty("type").GetString() == "form");
+        var fields = form.GetProperty("fields").EnumerateArray().ToList();
+        Assert.Equal(3, fields.Count);
+
+        // Field kinds are flattened onto the field, not nested in a second object.
+        var greeting = fields[0];
+        Assert.Equal("greeting", greeting.GetProperty("id").GetString());
+        Assert.Equal("text", greeting.GetProperty("kind").GetString());
+        Assert.True(greeting.GetProperty("required").GetBoolean());
+    }
+
+    [Fact]
+    public void Stored_settings_are_reflected_back_into_the_rendered_form()
+    {
+        // The operator must see what is currently configured, not an empty form.
+        var (runtime, backend, _) = Build();
+        using var _r = runtime;
+        backend.Settings["greeting"] = "configured greeting";
+        runtime.Start(Anchor);
+
+        using var page = JsonDocument.Parse(runtime.SettingsSchema()!.DocumentJson);
+        var greeting = page.RootElement
+            .GetProperty("sections").EnumerateArray()
+            .First(s => s.GetProperty("type").GetString() == "form")
+            .GetProperty("fields").EnumerateArray()
+            .First(f => f.GetProperty("id").GetString() == "greeting");
+
+        Assert.Equal("configured greeting", greeting.GetProperty("value").GetString());
     }
 }

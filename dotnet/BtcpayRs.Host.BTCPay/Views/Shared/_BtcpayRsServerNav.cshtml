@@ -1,0 +1,24 @@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@*
+    Adds a sidebar entry for every btcpay-rs plugin that has a settings page.
+
+    Registered once no matter how many such plugins are installed, and it enumerates them
+    here. Registering per plugin would render this partial once per plugin, each time listing
+    all of them.
+
+    This sits inside the server menu's <ul>, so it emits <li> items and nothing else.
+*@
+@{
+    var plugins = Services.GetServices<RustPluginHostedService>()
+        .Where(p => !string.IsNullOrEmpty(p.SettingsPath))
+        .OrderBy(p => p.PluginName)
+        .ToList();
+}
+
+@foreach (var plugin in plugins)
+{
+    <li>
+        <a class="dropdown-item" href="@plugin.SettingsPath">@plugin.PluginName</a>
+    </li>
+}

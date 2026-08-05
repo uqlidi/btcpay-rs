@@ -43,9 +43,49 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
         _pluginAssembly = pluginAssembly;
         _tickInterval = tickInterval ?? TimeSpan.FromMinutes(1);
         _runtime = new RustPluginRuntime(pluginId, new SettingsRepositoryBackend(pluginId, settings, logger), logger);
+        PluginIdentifier = pluginId;
     }
 
     /// <inheritdoc />
+    /// <summary>The plugin this service runs.</summary>
+    public string PluginIdentifier { get; }
+
+    /// <summary>
+    /// Where this plugin's settings page lives, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// Set from the generated plugin class rather than derived here, so it cannot disagree
+    /// with the route on the generated controller.
+    /// </remarks>
+    public string? SettingsPath { get; init; }
+
+    /// <summary>The plugin's display name, once it has started.</summary>
+    public string PluginName => _runtime.Metadata?.Name ?? PluginIdentifier;
+
+    /// <summary>
+    /// The settings page the plugin describes, rebuilt on every request so it reflects what
+    /// is currently stored.
+    /// </summary>
+    public UiPage SettingsPage()
+    {
+        var document = _runtime.SettingsSchema();
+        return document is null ? UiPage.Empty : UiPage.Parse(document.DocumentJson);
+    }
+
+    /// <summary>
+    /// Hands a settings submission to the plugin and carries out whatever it asks for.
+    /// </summary>
+    /// <returns>
+    /// The actions the plugin requested. Empty means it refused the submission, which it
+    /// reports by logging.
+    /// </returns>
+    public IReadOnlyList<uniffi.btcpay.PluginAction> SubmitSettings(
+        IReadOnlyDictionary<string, string> values)
+    {
+        return _runtime.Dispatch(new uniffi.btcpay.HostEvent.SettingsUpdated(
+            new Dictionary<string, string>(values)));
+    }
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // A plugin that cannot start must not take BTCPay down with it. BTCPay catches this
