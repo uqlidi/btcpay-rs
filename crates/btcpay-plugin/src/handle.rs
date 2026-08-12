@@ -7,13 +7,13 @@ use crate::error::PluginError;
 use crate::host::{EventListener, HostServices};
 use crate::plugin::Plugin;
 use crate::types::UiDocument;
-use crate::types::{HostEvent, PluginAction, PluginMetadata};
+use crate::types::{HostEvent, PageInfo, PluginAction, PluginMetadata};
 
 /// Contract version. The host refuses to load a plugin whose ABI it does not understand.
 ///
 /// Bump on **any** breaking change to the exported surface: a new/removed method on
 /// [`Plugin`], a changed record field, a renamed enum variant.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 /// Reported to the host before anything else is called.
 #[uniffi::export]
@@ -116,6 +116,35 @@ impl PluginHandle {
     /// See [`Plugin::settings_schema`].
     pub fn settings_schema(&self) -> Result<UiDocument, PluginError> {
         guard("settings_schema()", || Ok(self.inner.settings_schema()))
+    }
+
+    /// See [`Plugin::pages`], with the settings page prepended when there is one.
+    ///
+    /// Assembled here rather than in each plugin, so every plugin's menu is consistent and a
+    /// plugin cannot forget to list the page it already described.
+    pub fn pages(&self) -> Result<Vec<PageInfo>, PluginError> {
+        guard("pages()", || {
+            let mut pages = Vec::new();
+            if !btcpay_ui::Document::from_json(&self.inner.settings_schema().document_json)
+                .map(|d| d.is_empty())
+                .unwrap_or(true)
+            {
+                pages.push(PageInfo::settings());
+            }
+            pages.extend(self.inner.pages());
+            Ok(pages)
+        })
+    }
+
+    /// See [`Plugin::page`]. `"settings"` is served from [`Plugin::settings_schema`].
+    pub fn page(&self, id: String) -> Result<UiDocument, PluginError> {
+        guard("page()", || {
+            if id == "settings" {
+                Ok(self.inner.settings_schema())
+            } else {
+                self.inner.page(id)
+            }
+        })
     }
 
     /// See [`Plugin::handle`].

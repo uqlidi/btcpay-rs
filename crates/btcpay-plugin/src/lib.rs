@@ -37,6 +37,7 @@
 #![deny(missing_docs)]
 #![warn(clippy::all)]
 
+mod choice;
 mod error;
 mod handle;
 pub mod host;
@@ -44,32 +45,36 @@ mod plugin;
 mod tooling;
 mod types;
 
+pub use choice::Choice;
 pub use error::{HostError, PluginError};
 pub use handle::{btcpay_rs_abi_version, PluginHandle, SharedEventListener, ABI_VERSION};
 pub use host::{EventListener, HostServices};
 pub use plugin::Plugin;
 pub use types::{
-    HostEvent, InvoiceSummary, InvoiceTrigger, LogLevel, Notification, PluginAction,
-    PluginDependency, PluginEvent, PluginMetadata, UiDocument, WebhookRequest, UI_VERSION,
+    HostEvent, InvoiceSummary, InvoiceTrigger, LogLevel, MessageLevel, Notification, PageInfo,
+    PluginAction, PluginDependency, PluginEvent, PluginMetadata, UiDocument, WebhookRequest,
+    UI_VERSION,
 };
 
 #[doc(hidden)]
 pub use handle::register_plugin;
 
-pub use btcpay_plugin_macros::plugin;
+pub use btcpay_plugin_macros::{plugin, BtcpayChoice, BtcpaySettings};
 
 /// Describe a settings page or dashboard as data. See [`btcpay_ui`].
 pub use btcpay_ui as ui;
 
 /// Everything a typical plugin needs, in one import.
 pub mod prelude {
+    pub use crate::Choice;
     pub use crate::UiDocument;
     pub use crate::{
         EventListener, HostError, HostEvent, HostServices, InvoiceSummary, InvoiceTrigger,
-        LogLevel, Notification, Plugin, PluginAction, PluginDependency, PluginError, PluginEvent,
-        PluginMetadata, WebhookRequest,
+        LogLevel, MessageLevel, Notification, PageInfo, Plugin, PluginAction, PluginDependency,
+        PluginError, PluginEvent, PluginMetadata, WebhookRequest,
     };
-    pub use btcpay_ui::{AlertLevel, Document, Form, Stats, Table};
+    pub use btcpay_plugin_macros::{BtcpayChoice, BtcpaySettings};
+    pub use btcpay_ui::{Actions, AlertLevel, Button, Document, Form, Stats, Table};
     pub use std::sync::Arc;
 }
 

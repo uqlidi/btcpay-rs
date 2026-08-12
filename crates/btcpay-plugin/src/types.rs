@@ -158,6 +158,19 @@ pub enum HostEvent {
         /// The submitted settings, keyed by field id.
         values: HashMap<String, String>,
     },
+    /// A button on one of the plugin's pages was pressed.
+    ///
+    /// Distinct from a form submission: a form saves values, a command asks for work. The host
+    /// has already enforced any confirmation the button declared.
+    ///
+    /// The handler runs inside the request, so an operator is waiting. Long work should be
+    /// started here and reported on a later page load rather than finished before returning.
+    CommandInvoked {
+        /// The command id from the button that was pressed.
+        command: String,
+        /// The page the button was on.
+        page: String,
+    },
     /// A form rendered from the plugin's `UiDocument` was submitted.
     FormSubmitted {
         /// Identifier of the submitted form.
@@ -194,7 +207,16 @@ pub enum PluginAction {
         /// Message text.
         message: String,
     },
-    /// Re-render the plugin's UI (the host will call `settings_schema`/`dashboard` again).
+    /// Show a message to the operator on the page they are on.
+    ///
+    /// The way to report what a command did, or why it could not.
+    ShowMessage {
+        /// How prominent the message is.
+        level: MessageLevel,
+        /// The message. Plain text; the host encodes it.
+        text: String,
+    },
+    /// Re-render the plugin's UI. The host rebuilds the page from the plugin.
     Refresh,
 }
 
@@ -245,6 +267,60 @@ pub struct WebhookRequest {
     pub event_type: String,
     /// JSON payload, already serialized.
     pub payload_json: String,
+}
+
+// ------------------------------------------------------------------------- pages
+
+/// One page a plugin contributes to BTCPay's admin.
+///
+/// Listing pages is separate from building them: a menu needs only ids and titles, and
+/// building every page to render a menu would be wasteful for a plugin whose dashboard is
+/// expensive to assemble.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PageInfo {
+    /// Identifies the page, and appears in its URL. Lowercase letters, digits and hyphens.
+    pub id: String,
+    /// Shown as the page heading and its menu entry.
+    pub title: String,
+    /// Whether to offer this page in the server menu.
+    ///
+    /// A page reachable only from another page, such as a detail view, should set this false.
+    pub in_menu: bool,
+}
+
+impl PageInfo {
+    /// A page that appears in the menu.
+    pub fn new(id: impl Into<String>, title: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            title: title.into(),
+            in_menu: true,
+        }
+    }
+
+    /// The conventional settings page.
+    pub fn settings() -> Self {
+        Self::new("settings", "Settings")
+    }
+
+    /// Keeps the page out of the menu.
+    pub fn hidden(mut self) -> Self {
+        self.in_menu = false;
+        self
+    }
+}
+
+/// How prominent a message shown to the operator is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MessageLevel {
+    /// Something worked.
+    Success,
+    /// Neutral information.
+    Info,
+    /// Something needs attention.
+    Warning,
+    /// Something failed.
+    Error,
 }
 
 // ----------------------------------------------------------------------------- UI

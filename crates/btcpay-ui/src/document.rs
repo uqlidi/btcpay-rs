@@ -54,6 +54,11 @@ impl Document {
         self.section(table)
     }
 
+    /// Appends a group of buttons.
+    pub fn actions(self, actions: crate::Actions) -> Self {
+        self.section(actions)
+    }
+
     /// Appends a row of headline numbers.
     pub fn stats(self, stats: crate::Stats) -> Self {
         self.section(stats)

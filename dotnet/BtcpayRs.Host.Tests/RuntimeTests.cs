@@ -109,13 +109,14 @@ public sealed class RuntimeTests
         using var _r = runtime;
         runtime.Start(Anchor);
 
-        // hello-plugin refuses an empty greeting.
+        // hello-plugin marks its greeting required, so the derive rejects an empty one. The
+        // message names the field by its form label rather than its storage key.
         var actions = runtime.Dispatch(new HostEvent.SettingsUpdated(
             new Dictionary<string, string> { ["greeting"] = "   " }));
 
         Assert.Empty(actions);
         Assert.False(backend.Settings.ContainsKey("greeting"));
-        Assert.True(logger.HasError("greeting must not be empty"),
+        Assert.True(logger.HasError("Greeting is required"),
             "the plugin's rejection should be logged for the operator");
 
         // The runtime is still usable afterwards.
@@ -268,13 +269,22 @@ public sealed class RuntimeTests
 
         var form = sections.First(s => s.GetProperty("type").GetString() == "form");
         var fields = form.GetProperty("fields").EnumerateArray().ToList();
-        Assert.Equal(3, fields.Count);
+        Assert.Equal(4, fields.Count);
 
         // Field kinds are flattened onto the field, not nested in a second object.
         var greeting = fields[0];
         Assert.Equal("greeting", greeting.GetProperty("id").GetString());
         Assert.Equal("text", greeting.GetProperty("kind").GetString());
         Assert.True(greeting.GetProperty("required").GetBoolean());
+
+        // A dropdown carries its options, generated from the Rust enum rather than listed by
+        // hand, so the form cannot offer a value the field could not hold.
+        var verbosity = fields.Single(f => f.GetProperty("id").GetString() == "verbosity");
+        Assert.Equal("select", verbosity.GetProperty("kind").GetString());
+        var options = verbosity.GetProperty("options").EnumerateArray().ToList();
+        Assert.Equal(3, options.Count);
+        Assert.Contains(options, o => o.GetProperty("value").GetString() == "quiet");
+        Assert.Contains(options, o => o.GetProperty("label").GetString()!.Contains("Quiet"));
     }
 
     [Fact]

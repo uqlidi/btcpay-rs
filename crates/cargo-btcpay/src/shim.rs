@@ -235,8 +235,8 @@ public class SettingsController : RustPluginSettingsControllerBase
 
 /// A URL-safe path segment for a plugin, derived from its identifier.
 ///
-/// Lowercased and dotted segments joined with hyphens, so `Acme.Plugins.Thing` serves from
-/// `plugins/acme-plugins-thing/settings`.
+/// Lowercased and dotted segments joined with hyphens, so `Acme.Plugins.Thing` serves its
+/// pages from `plugins/acme-plugins-thing/<page>`.
 pub fn route_for(identifier: &str) -> String {
     let slug: String = identifier
         .chars()
@@ -246,7 +246,7 @@ pub fn route_for(identifier: &str) -> String {
             _ => '-',
         })
         .collect();
-    format!("plugins/{slug}/settings")
+    format!("plugins/{slug}")
 }
 
 fn xml_escape(value: &str) -> String {

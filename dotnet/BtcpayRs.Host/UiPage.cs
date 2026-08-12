@@ -47,6 +47,19 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
     public UiSection.Form? FormById(string formId) =>
         Sections.OfType<UiSection.Form>().FirstOrDefault(f => f.Id == formId);
 
+    /// <summary>
+    /// Finds a button by command id.
+    /// </summary>
+    /// <remarks>
+    /// The page is rebuilt from the plugin before a press is acted on, so a command that is
+    /// not on it means a stale page or a crafted post. That is also where the button's
+    /// confirmation requirement is read from, rather than trusting the request.
+    /// </remarks>
+    public UiButton? ButtonByCommand(string command) =>
+        Sections.OfType<UiSection.Actions>()
+            .SelectMany(a => a.Buttons)
+            .FirstOrDefault(b => b.Command == command);
+
     private static UiSection ParseSection(JsonElement element)
     {
         var type = Text(element, "type");
@@ -63,6 +76,7 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
                 Rows(element),
                 Optional(element, "emptyMessage")),
             "stats" => new UiSection.Stats(ParseCards(element)),
+            "actions" => new UiSection.Actions(Optional(element, "title"), ParseButtons(element)),
             "alert" => new UiSection.Alert(Text(element, "level", "info"), Text(element, "text")),
             "text" => new UiSection.Text(Text(element, "text")),
             _ => new UiSection.Unknown(type),
@@ -95,6 +109,20 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
 
         return array.EnumerateArray()
             .Select(o => new UiSelectOption(Text(o, "value"), Text(o, "label")))
+            .ToList();
+    }
+
+    private static IReadOnlyList<UiButton> ParseButtons(JsonElement element)
+    {
+        if (!element.TryGetProperty("buttons", out var array) || array.ValueKind != JsonValueKind.Array)
+            return [];
+
+        return array.EnumerateArray()
+            .Select(b => new UiButton(
+                Text(b, "command"),
+                Text(b, "label"),
+                Text(b, "style", "secondary"),
+                Optional(b, "confirm")))
             .ToList();
     }
 
@@ -164,6 +192,9 @@ public abstract record UiSection
     /// <summary>A coloured notice.</summary>
     public sealed record Alert(string Level, string Message) : UiSection;
 
+    /// <summary>Buttons that ask the plugin to do something.</summary>
+    public sealed record Actions(string? Title, IReadOnlyList<UiButton> Buttons) : UiSection;
+
     /// <summary>A paragraph.</summary>
     public sealed record Text(string Value) : UiSection;
 
@@ -199,6 +230,20 @@ public sealed record UiField(
 
     /// <summary>Whether the field is currently on, for a toggle.</summary>
     public bool IsOn => string.Equals(Value, "true", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>A button that asks the plugin to do something.</summary>
+/// <param name="Command">Sent to the plugin when pressed.</param>
+/// <param name="Label">Text on the button.</param>
+/// <param name="Style">One of <c>primary</c>, <c>secondary</c> or <c>danger</c>.</param>
+/// <param name="Confirm">
+/// When set, the operator must confirm first. Enforced by the host, so a plugin cannot be
+/// surprised by an unconfirmed press.
+/// </param>
+public sealed record UiButton(string Command, string Label, string Style, string? Confirm)
+{
+    /// <summary>Whether pressing this needs confirmation.</summary>
+    public bool NeedsConfirmation => !string.IsNullOrEmpty(Confirm);
 }
 
 /// <summary>One choice in a dropdown.</summary>

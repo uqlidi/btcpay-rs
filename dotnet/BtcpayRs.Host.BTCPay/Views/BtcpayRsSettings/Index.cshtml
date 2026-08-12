@@ -13,6 +13,21 @@
         .SetCategory(WellKnownCategories.Server));
 }
 
+@section PageFootContent {
+    <script>
+        // Confirmation for destructive commands. The server checks it as well, so skipping
+        // this in the browser does not bypass anything.
+        document.querySelectorAll('form.btcpay-rs-command').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                var question = form.dataset.confirm;
+                if (question && !window.confirm(question)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    </script>
+}
+
 <div class="sticky-header">
     <h2 class="my-1">@title</h2>
 </div>
@@ -110,6 +125,32 @@
                             </table>
                         </div>
                     }
+                    break;
+
+                case UiSection.Actions actions:
+                    @if (actions.Title is not null)
+                    {
+                        <h4 class="mt-4 mb-3">@actions.Title</h4>
+                    }
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        @foreach (var button in actions.Buttons)
+                        {
+                            @* One form per button: each posts its own command, and a confirm
+                               dialog on submit is what an operator expects. The server checks
+                               the confirmation too, so a post that skips this is refused. *@
+                            <form method="post" class="d-inline btcpay-rs-command"
+                                  data-confirm="@(button.Confirm ?? string.Empty)">
+                                <input type="hidden" name="command" value="@button.Command" />
+                                @if (button.NeedsConfirmation)
+                                {
+                                    <input type="hidden" name="confirmed" value="true" />
+                                }
+                                <button type="submit" class="btn btn-@ButtonClass(button.Style)">
+                                    @button.Label
+                                </button>
+                            </form>
+                        }
+                    </div>
                     break;
 
                 case UiSection.Form form:
@@ -212,5 +253,13 @@
         "warning" => "warning",
         "danger" => "danger",
         _ => "info",
+    };
+
+    // Same reasoning for button styles: an unknown style falls back rather than being emitted.
+    static string ButtonClass(string style) => style switch
+    {
+        "primary" => "primary",
+        "danger" => "danger",
+        _ => "secondary",
     };
 }

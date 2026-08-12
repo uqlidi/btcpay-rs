@@ -1,11 +1,15 @@
 //! Procedural macros for `btcpay-plugin`. Not intended to be used directly; depend on
 //! `btcpay-plugin` and use `#[btcpay_plugin::plugin]`.
 
+mod choice;
+mod settings;
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::punctuated::Punctuated;
 use syn::{
-    parse_macro_input, Error, Expr, ExprLit, ExprPath, ImplItem, ItemImpl, Lit, Meta, Token, Type,
+    parse_macro_input, DeriveInput, Error, Expr, ExprLit, ExprPath, ImplItem, ItemImpl, Lit, Meta,
+    Token, Type,
 };
 
 /// Registers a [`Plugin`](trait@btcpay_plugin::Plugin) implementation as *the* plugin
@@ -244,4 +248,80 @@ fn string_literal(value: Expr, key: &str) -> syn::Result<ExprLit> {
             format!("`{key}` takes a string literal"),
         )),
     }
+}
+
+/// Derives a settings form, typed loading and saving, and validation from one struct.
+///
+/// ```ignore
+/// #[derive(Default, BtcpaySettings)]
+/// struct Settings {
+///     #[setting(label = "API key", secret, required)]
+///     api_key: String,
+///     #[setting(label = "Poll interval (seconds)", min = 5, max = 3600)]
+///     poll_secs: u32,
+///     #[setting(label = "Enabled")]
+///     enabled: bool,
+/// }
+/// ```
+///
+/// That generates four things, so the form, the storage keys and the code cannot drift apart:
+///
+/// - `form()`: the form with current values filled in
+/// - `load(host)`: read from the host, falling back to [`Default`] per field
+/// - `from_values(values)`: parse a submission, applying the declared rules
+/// - `to_values()`: what to persist
+///
+/// Requires [`Default`], which supplies the value for anything not yet stored.
+///
+/// # Field attributes
+///
+/// | attribute | meaning |
+/// |---|---|
+/// | `label = "..."` | shown next to the input; defaults to the field name |
+/// | `help = "..."` | explanation under the input |
+/// | `key = "..."` | storage key; defaults to the field name |
+/// | `required` | the operator must supply a value |
+/// | `secret` | a password input, never sent to the browser |
+/// | `min` / `max` | bounds, for numeric fields |
+///
+/// # Supported types
+///
+/// `String`, `bool`, and the integer types. Anything else is a compile error naming the type.
+/// For a dropdown, or a form whose shape depends on runtime state, describe it with the
+/// builder API instead: this derive is for the common case, not every case.
+#[proc_macro_derive(BtcpaySettings, attributes(setting))]
+pub fn btcpay_settings(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    settings::derive(input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+/// Derives [`Choice`](btcpay_plugin::Choice) for a unit-only enum, so a field of that type
+/// renders as a dropdown.
+///
+/// ```ignore
+/// #[derive(Default, Clone, Copy, PartialEq, BtcpayChoice)]
+/// enum Network {
+///     #[choice(label = "Mainnet")]
+///     #[default]
+///     Main,
+///     #[choice(label = "Testnet")]
+///     Test,
+/// }
+/// ```
+///
+/// | attribute | meaning |
+/// |---|---|
+/// | `label = "..."` | shown in the dropdown; defaults to the variant name |
+/// | `value = "..."` | what gets stored; defaults to the variant name in snake_case |
+///
+/// Variants cannot carry data: a dropdown option is a single value. Two variants sharing a
+/// stored value is a compile error, since one of them would be unreachable.
+#[proc_macro_derive(BtcpayChoice, attributes(choice))]
+pub fn btcpay_choice(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    choice::derive(input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
 }
