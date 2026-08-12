@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::config::Config;
 use crate::metadata::PluginMetadata;
 use crate::workspace::{run, run_streaming, Layout};
-use crate::{host, metadata, shim, toolchain};
+use crate::{host, metadata, native, shim, toolchain};
 
 /// Everything produced by a successful build.
 pub struct Built {
@@ -36,7 +36,15 @@ pub fn build(plugin_dir: &Path, release: bool) -> Result<Built, String> {
     println!("Building the plugin library");
     let native_library = cargo_build(plugin_dir, release)?;
 
-    // 2. What the plugin says it is. Everything downstream is derived from this, so the
+    // 2. Native dependencies, before anything else is built. A plugin needing a library
+    //    BTCPay does not provide would install and then fail to load, so it is better to
+    //    refuse to build it than to hand an operator a broken package.
+    let missing = native::unsatisfied_dependencies(&native_library)?;
+    if !missing.is_empty() {
+        return Err(native::explain(&missing));
+    }
+
+    // 3. What the plugin says it is. Everything downstream is derived from this, so the
     //    generated C# cannot disagree with the library it wraps.
     let md = metadata::read(&native_library)?;
     println!(
@@ -44,19 +52,19 @@ pub fn build(plugin_dir: &Path, release: bool) -> Result<Built, String> {
         md.identifier, md.version, md.abi_version
     );
 
-    // 3. Host assemblies, written from this binary so no checkout of btcpay-rs is needed.
+    // 4. Host assemblies, written from this binary so no checkout of btcpay-rs is needed.
     let host_projects = host::materialise(&layout)?;
 
-    // 4. Bindings, generated from the library just built.
+    // 5. Bindings, generated from the library just built.
     println!("Generating bindings");
     generate_bindings(plugin_dir, &native_library, &host_projects.bindings_file)?;
 
-    // 5. The plugin's own C# project.
+    // 6. The plugin's own C# project.
     let shim_dir = layout.shim_dir();
     shim::generate(&md, &config, &shim_dir)?;
     let shim_project = shim_dir.join(format!("{}.csproj", md.identifier));
 
-    // 6. BTCPay itself, for Abstractions.
+    // 7. BTCPay itself, for Abstractions.
     let btcpayserver_project = toolchain::ensure_btcpayserver(&config.build.btcpay_tag)?;
 
     println!("Building the plugin wrapper");

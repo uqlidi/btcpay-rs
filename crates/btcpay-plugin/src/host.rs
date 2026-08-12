@@ -36,6 +36,22 @@ pub trait HostServices: Send + Sync {
     /// Remove a key from this plugin's private store.
     fn store_delete(&self, key: String) -> Result<(), HostError>;
 
+    /// A directory this plugin may write files in.
+    ///
+    /// Created before the plugin starts, private to this plugin, and stable across restarts
+    /// and upgrades. Use it for anything that does not fit a key/value pair: a wallet, a
+    /// database, a log the plugin manages itself.
+    ///
+    /// It lives inside BTCPay's own data directory, so an operator's existing backups and
+    /// volume mounts already cover it. Two consequences worth knowing:
+    ///
+    /// - **Nothing here is transactional.** Unlike settings, a half-written file stays
+    ///   half-written. A plugin holding anything it cannot afford to lose is responsible for
+    ///   writing it safely, for example by writing beside the target and renaming.
+    /// - **Nothing here is migrated.** File formats are the plugin's own problem across
+    ///   versions.
+    fn data_dir(&self) -> String;
+
     /// Write to BTCPay's log. Prefer this over `println!`: it reaches the operator.
     fn log(&self, level: LogLevel, message: String);
 

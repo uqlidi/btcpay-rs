@@ -37,6 +37,12 @@ public sealed class HostServicesImpl : HostServices
     }
 
     /// <inheritdoc />
+    public string DataDir() =>
+        // A fallback path would be worse than an empty string: the plugin would write files
+        // somewhere unexpected and an operator would not find them. Empty is checkable.
+        Safe(nameof(DataDir), () => _backend.DataDirectory, string.Empty);
+
+    /// <inheritdoc />
     public string? GetSetting(string key) =>
         Safe(nameof(GetSetting), () => _backend.GetSetting(key), null);
 

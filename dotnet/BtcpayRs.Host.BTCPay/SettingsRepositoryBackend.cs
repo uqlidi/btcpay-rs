@@ -30,12 +30,20 @@ public sealed class SettingsRepositoryBackend : IPluginBackend
     private PluginState? _cache;
 
     /// <summary>Creates the backend for one plugin.</summary>
-    public SettingsRepositoryBackend(string pluginId, ISettingsRepository settings, ILogger logger)
+    public SettingsRepositoryBackend(
+        string pluginId,
+        ISettingsRepository settings,
+        ILogger logger,
+        string dataDirectory)
     {
         _pluginId = pluginId;
         _settings = settings;
         _logger = logger;
+        DataDirectory = dataDirectory;
     }
+
+    /// <inheritdoc />
+    public string DataDirectory { get; }
 
     /// <summary>Persisted shape of a plugin's settings and key/value store.</summary>
     public sealed class PluginState

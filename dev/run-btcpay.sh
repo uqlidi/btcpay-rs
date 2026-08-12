@@ -17,6 +17,15 @@ if [ ! -f "$BTCPAY" ]; then
   exit 1
 fi
 
+# BTCPay records a plugin that crashed at startup in a `disabled` file and skips it on every
+# later boot. Reinstalling does not clear it, so without this a single bad build looks like a
+# plugin that silently stopped existing.
+if [ -f plugins/disabled ] && grep -q "$IDENTIFIER" plugins/disabled 2>/dev/null; then
+  echo "==> $IDENTIFIER was disabled after a crash; re-enabling"
+  grep -v "$IDENTIFIER" plugins/disabled > plugins/disabled.tmp 2>/dev/null || true
+  mv plugins/disabled.tmp plugins/disabled
+fi
+
 echo "==> installing $IDENTIFIER"
 rm -rf "plugins/$IDENTIFIER"
 mkdir -p "plugins/$IDENTIFIER"

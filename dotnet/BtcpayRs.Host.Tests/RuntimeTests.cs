@@ -161,6 +161,24 @@ public sealed class RuntimeTests
     }
 
     [Fact]
+    public void A_plugin_can_write_files_in_its_data_directory()
+    {
+        // Not just that a path is handed over: that a plugin writing to it actually succeeds.
+        // hello-plugin writes a file during start.
+        var (runtime, backend, logger) = Build();
+        using var _r = runtime;
+        using var _b = backend;
+
+        runtime.Start(Anchor);
+
+        var written = Path.Combine(backend.DataDirectory, "last-start.txt");
+        Assert.True(File.Exists(written),
+            $"the plugin should have written into {backend.DataDirectory}");
+        Assert.False(logger.HasError("could not write"),
+            "writing should not have failed");
+    }
+
+    [Fact]
     public void Changing_a_setting_takes_effect_on_the_running_plugin()
     {
         // Persisting a value is not enough: a plugin that only reads its settings at startup

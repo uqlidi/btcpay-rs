@@ -6,6 +6,7 @@ mod config;
 mod docker;
 mod host;
 mod metadata;
+mod native;
 mod scaffold;
 mod shim;
 mod toolchain;

@@ -3,8 +3,12 @@ using uniffi.btcpay;
 namespace BtcpayRs.Host.Tests;
 
 /// <summary>In-memory <see cref="IPluginBackend"/> that records what the plugin asked for.</summary>
-internal sealed class FakeBackend : IPluginBackend
+internal sealed class FakeBackend : IPluginBackend, IDisposable
 {
+    /// <summary>A real directory, so a plugin writing files is genuinely exercised.</summary>
+    public string DataDirectory { get; } =
+        Directory.CreateTempSubdirectory("btcpay-rs-test-").FullName;
+
     public readonly Dictionary<string, string> Settings = new();
     public readonly Dictionary<string, byte[]> Store = new();
     public readonly List<Notification> Notifications = new();
@@ -59,4 +63,11 @@ internal sealed class FakeBackend : IPluginBackend
     {
         if (Fault is not null) throw Fault();
     }
+
+    /// <summary>Removes the temporary directory.</summary>
+    public void Dispose()
+    {
+        try { Directory.Delete(DataDirectory, recursive: true); } catch { /* best effort */ }
+    }
+
 }
