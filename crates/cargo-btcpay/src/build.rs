@@ -156,6 +156,7 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<PathBuf, String> {
     let size = std::fs::metadata(&package).map(|m| m.len()).unwrap_or(0);
     println!();
     println!("Packaged {} ({} KB)", package.display(), size / 1024);
+    warn_if_large(size);
     Ok(package)
 }
 
@@ -182,6 +183,36 @@ fn cargo_build(plugin_dir: &Path, release: bool) -> Result<PathBuf, String> {
         ));
     }
     Ok(library)
+}
+
+/// Kestrel's default maximum request body, which BTCPay does not override.
+///
+/// It bounds the admin UI's plugin upload. Extracting a package into the plugin directory is
+/// not affected, which is how a deployment tool or `dev/run-btcpay.sh` installs one, but an
+/// operator uploading through the browser is.
+const UPLOAD_LIMIT_BYTES: u64 = 30_000_000;
+
+/// Warns when a package is close to, or past, what an operator could upload.
+///
+/// A warning rather than an error: the limit applies only to the upload path, and a plugin
+/// installed by other means works regardless.
+fn warn_if_large(size: u64) {
+    if size > UPLOAD_LIMIT_BYTES {
+        println!();
+        println!(
+            "warning: at {} MB this exceeds the {} MB request limit BTCPay's plugin upload \n\
+             inherits from Kestrel, so an operator cannot install it through the admin UI.\n\
+             Extracting it into the plugin directory still works.",
+            size / 1_000_000,
+            UPLOAD_LIMIT_BYTES / 1_000_000
+        );
+    } else if size > UPLOAD_LIMIT_BYTES / 2 {
+        println!(
+            "  note: {} MB, over half the {} MB upload limit",
+            size / 1_000_000,
+            UPLOAD_LIMIT_BYTES / 1_000_000
+        );
+    }
 }
 
 /// Asks cargo where this package's build output goes.

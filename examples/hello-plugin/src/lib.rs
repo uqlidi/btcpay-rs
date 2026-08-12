@@ -33,7 +33,10 @@ impl Plugin for HelloPlugin {
             format!("{greeting}\n"),
         ) {
             Ok(()) => host.log(LogLevel::Debug, format!("wrote state to {data_dir}")),
-            Err(e) => host.log(LogLevel::Warn, format!("could not write to {data_dir}: {e}")),
+            Err(e) => host.log(
+                LogLevel::Warn,
+                format!("could not write to {data_dir}: {e}"),
+            ),
         }
 
         host.log(LogLevel::Info, format!("hello-plugin started: {greeting}"));

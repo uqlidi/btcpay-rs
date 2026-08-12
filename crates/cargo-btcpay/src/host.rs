@@ -26,6 +26,10 @@ const HOST_FILES: &[Embedded] = &[
         contents: include_str!("../../../dotnet/BtcpayRs.Host/NativeLoader.cs"),
     },
     Embedded {
+        relative_path: "BtcpayRs.Host/Deadline.cs",
+        contents: include_str!("../../../dotnet/BtcpayRs.Host/Deadline.cs"),
+    },
+    Embedded {
         relative_path: "BtcpayRs.Host/HostServicesImpl.cs",
         contents: include_str!("../../../dotnet/BtcpayRs.Host/HostServicesImpl.cs"),
     },

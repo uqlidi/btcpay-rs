@@ -132,19 +132,8 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
         _tick?.Dispose();
         _tick = null;
 
-        // Stopping runs on a worker so a plugin that never returns cannot hold BTCPay's
-        // shutdown open. The plugin is abandoned rather than killed: there is no safe way to
-        // interrupt Rust mid-operation, and a plugin holding funds could be left inconsistent.
-        // BTCPay is exiting anyway, so the process ends regardless.
-        var stopping = Task.Run(_runtime.Stop, CancellationToken.None);
-
-        if (await Task.WhenAny(stopping, Task.Delay(_shutdownTimeout, cancellationToken)) != stopping)
-        {
-            _logger.LogWarning(
-                "[{Plugin}] did not stop within {Seconds}s and is being abandoned. Work it had "
-                + "not finished may be incomplete; it should recover on next start.",
-                PluginIdentifier, _shutdownTimeout.TotalSeconds);
-        }
+        await Deadline.RunAsync(
+            _runtime.Stop, _shutdownTimeout, _logger, $"[{PluginIdentifier}] stopping");
     }
 
     private void OnInvoiceEvent(InvoiceEvent e)
