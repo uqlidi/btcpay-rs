@@ -43,7 +43,21 @@ echo
 echo "==> starting BTCPay regtest (first run pulls images and builds the database)"
 docker compose up -d
 
+# `up -d` leaves an already-running container alone, and extracting a plugin does not change any
+# compose config, so on a reinstall BTCPay would keep running with the previous copy loaded. That
+# looks exactly like a plugin that installed fine but whose pages are missing. Plugins are only
+# read at startup, so the restart is what makes the install take effect.
+echo
+echo "==> restarting BTCPay so it loads $IDENTIFIER"
+docker compose restart btcpayserver
+
+# Tor borrows btcpayserver's network namespace, so restarting BTCPay takes it down with it. Its
+# restart policy would eventually bring it back, but doing it here means the maker does not spend
+# its first minutes unable to reach a control port.
+echo "==> restarting tor, whose network namespace went with it"
+docker compose restart tor
+
 echo
 echo "BTCPay will be at http://localhost:14142 once it finishes starting."
 echo "Follow the plugin loading with:"
-echo "  docker compose -f dev/docker-compose.yml logs -f btcpayserver | grep -i hello"
+echo "  docker compose -f dev/docker-compose.yml logs -f btcpayserver | grep -i ${IDENTIFIER##*.}"

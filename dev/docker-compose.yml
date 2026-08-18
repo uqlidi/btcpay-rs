@@ -3,7 +3,14 @@
 #   ./dev/run-btcpay.sh
 #
 # Trimmed from BTCPayServer.Tests/docker-compose.yml to the four services BTCPay actually
-# needs to boot: postgres, bitcoind, NBXplorer, and BTCPay itself. No Lightning nodes, no Tor.
+# needs to boot: postgres, bitcoind, NBXplorer, and BTCPay itself. No Lightning nodes.
+#
+# Two more exist for the coinswap plugin specifically, and neither is wired to BTCPay:
+#
+#   - `bitcoind-signet`, on the coinswap network's custom signet. BTCPay itself stays on regtest;
+#     see that service for why the two can disagree, and why they have to.
+#   - `tor`, so the maker can publish an onion service. It shares BTCPay's network namespace,
+#     which that service explains.
 #
 # BTCPay is pinned to the same version the plugin was compiled against. A plugin built against
 # a different BTCPay will be refused by its own dependency condition (">=2.4.0").
@@ -38,12 +45,64 @@ services:
         rpcallowip=0.0.0.0/0
         port=39388
         whitelist=0.0.0.0/0
+        # Both topics on one endpoint, because a consumer subscribes to an address and then
+        # filters by topic. coinswap's watchtower wants rawblock and rawtx together and takes a
+        # single address for both, so splitting them across ports would silently deliver only
+        # half. Nothing here consumes them separately: nbxplorer uses the P2P port and RPC.
         zmqpubrawblock=tcp://0.0.0.0:28332
-        zmqpubrawtx=tcp://0.0.0.0:28333
+        zmqpubrawtx=tcp://0.0.0.0:28332
         fallbackfee=0.0002
         minrelaytxfee=0.00001000
+        # coinswap refuses to start without txindex and checks for it up front, so the regtest
+        # node carries it too. Without it a missing index would only surface mid-swap.
+        txindex=1
+        blockfilterindex=1
     volumes:
       - bitcoin_datadir:/data
+
+  # A second node, on the custom signet the coinswap network uses. Its settings come from
+  # coinswap's own `docs/bitcoin.conf`, which documents this exact chain.
+  #
+  # Separate from `bitcoind` rather than replacing it, for two reasons. A custom
+  # `signetchallenge` changes the P2P network magic, and NBitcoin's signet definition carries the
+  # public signet's, so nbxplorer and BTCPay could not follow this chain anyway. And they do not
+  # need to: the coinswap maker reaches its node over RPC and ZMQ directly and never asks BTCPay
+  # for chain data, so the plugin can be on signet while BTCPay stays on regtest. That is the
+  # same separation as the maker keeping its own wallet.
+  #
+  # This one syncs from a real peer over the internet, so unlike the regtest node it is not
+  # self-contained and needs outbound network access.
+  bitcoind-signet:
+    image: btcpayserver/bitcoin:31.0
+    restart: unless-stopped
+    environment:
+      # The image writes `signet=1` and a `[signet]` section header, then appends
+      # BITCOIN_EXTRA_ARGS, so everything below lands inside that section. Do not repeat
+      # `signet=1` here: bitcoind rejects it inside a network section.
+      BITCOIN_NETWORK: signet
+      BITCOIN_WALLETDIR: "/data/wallets"
+      # The image otherwise creates a `default` wallet and pins it with `wallet=default`, and on a
+      # fresh signet volume bitcoind then refuses to load what it just created ("Data is not in
+      # recognized format") and exits. Nothing here wants that wallet anyway: coinswap lists,
+      # loads or creates its own watch-only wallet over RPC, named by the plugin's Wallet name
+      # setting.
+      CREATE_WALLET: "false"
+      BITCOIN_EXTRA_ARGS: |-
+        signetchallenge=0014a3ec9c731da66d9725d54947aede5c830623f33d
+        addnode=170.75.166.88:38333
+        dnsseed=0
+        rpcuser=coinswap
+        rpcpassword=coinswap
+        rpcport=38332
+        rpcbind=0.0.0.0:38332
+        rpcallowip=0.0.0.0/0
+        zmqpubrawblock=tcp://0.0.0.0:28332
+        zmqpubrawtx=tcp://0.0.0.0:28332
+        txindex=1
+        blockfilterindex=1
+        fallbackfee=0.00001000
+    volumes:
+      - bitcoin_signet_datadir:/data
 
   nbxplorer:
     image: nicolasdorier/nbxplorer:2.6.5
@@ -97,8 +156,47 @@ services:
       - btcpay_datadir:/datadir
       - ./plugins:/plugins
 
+  # Tor, for the coinswap maker to publish itself as an onion service.
+  #
+  # `network_mode: service:btcpayserver` is load-bearing, not a shortcut. coinswap hardcodes
+  # 127.0.0.1 for all three things it uses Tor for -- the control port (`check_tor_status`,
+  # `get_ephemeral_address`), the SOCKS proxy (`socks5_connect`), and the address ADD_ONION
+  # forwards to -- and makes only the ports configurable. So:
+  #
+  #   - a service reachable as `tor:9050` would never be looked up, because the plugin runs inside
+  #     the BTCPay container and looks at its own localhost;
+  #   - and even if the host were configurable, the onion service forwards to `127.0.0.1:<maker
+  #     port>`, which Tor resolves in its own namespace. Tor must sit where the maker's listener
+  #     is regardless.
+  #
+  # Sharing the namespace satisfies both at once, and keeps the control port unreachable from
+  # anywhere else. A Tor control port is remote code execution over onion services, so it should
+  # never be published more widely than this.
+  #
+  # The cost of sharing a namespace: this container dies when btcpayserver restarts, because the
+  # namespace it borrowed goes away. `run-btcpay.sh` restarts it afterwards for that reason.
+  tor:
+    build: ./tor
+    restart: unless-stopped
+    depends_on:
+      btcpayserver:
+        condition: service_started
+    network_mode: "service:btcpayserver"
+    environment:
+      # Must match the plugin's "Tor control password" setting. Fine to leave as-is for a local
+      # dev stack, where the control port is reachable only from inside this namespace.
+      TOR_CONTROL_PASSWORD: coinswap
+    volumes:
+      - tor_datadir:/var/lib/tor
+
 volumes:
   postgres_datadir:
   bitcoin_datadir:
+  # Kept apart from bitcoin_datadir so wiping the throwaway regtest chain does not throw away a
+  # signet sync that came off the network.
+  bitcoin_signet_datadir:
   nbxplorer_datadir:
   btcpay_datadir:
+  # Keeps the onion service key across restarts, so the maker's address survives a reboot. A
+  # fidelity bond commits to the address it was created for, so losing this strands the bond.
+  tor_datadir:
