@@ -305,4 +305,70 @@ public sealed class RuntimeTests
 
         Assert.Equal("configured greeting", greeting.GetProperty("value").GetString());
     }
+
+    [Fact]
+    public void A_form_on_a_page_reaches_the_plugin_as_a_form_and_not_as_a_settings_save()
+    {
+        // Every form used to be delivered as a settings save, so a page asking the operator for
+        // input had that input treated as configuration: the plugin persisted whatever keys it
+        // recognised and ignored the rest. A plugin that needs an address or an amount cannot
+        // work that way, so the two are now distinct events.
+        var (runtime, backend, _) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        var actions = runtime.Dispatch(new HostEvent.FormSubmitted(
+            "note", new Dictionary<string, string> { ["text"] = "written by hand" }));
+
+        Assert.Contains(actions, a => a is PluginAction.ShowMessage);
+        // Nothing was persisted: this was not a settings change.
+        Assert.False(backend.Settings.ContainsKey("text"));
+    }
+
+    [Fact]
+    public void A_page_form_submission_shows_up_on_the_page_that_owns_it()
+    {
+        var (runtime, _, _) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        runtime.Dispatch(new HostEvent.FormSubmitted(
+            "note", new Dictionary<string, string> { ["text"] = "visible afterwards" }));
+
+        var page = UiPage.Parse(runtime.Page("dashboard")!.DocumentJson);
+        var rows = page.Sections.OfType<UiSection.Table>().Single().Rows;
+        Assert.Contains(rows, row => row.Any(cell => cell.Contains("visible afterwards")));
+    }
+
+    [Fact]
+    public void An_unknown_form_id_is_refused_rather_than_acted_on()
+    {
+        // The host looks a form up on the rebuilt page before posting it, so this should be
+        // unreachable through the UI. It is refused anyway: that check is the host's, and the
+        // plugin should not depend on someone else validating its input.
+        var (runtime, _, logger) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        var actions = runtime.Dispatch(new HostEvent.FormSubmitted(
+            "not-a-form", new Dictionary<string, string> { ["text"] = "x" }));
+
+        Assert.Empty(actions);
+        Assert.True(logger.HasError("unknown form"));
+    }
+
+    [Fact]
+    public void A_page_form_rejects_input_it_cannot_use()
+    {
+        var (runtime, _, logger) = Build();
+        using var _r = runtime;
+        runtime.Start(Anchor);
+
+        var actions = runtime.Dispatch(new HostEvent.FormSubmitted(
+            "note", new Dictionary<string, string> { ["text"] = "   " }));
+
+        Assert.Empty(actions);
+        Assert.True(logger.HasError("cannot be empty"));
+    }
+
 }

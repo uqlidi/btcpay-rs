@@ -27,6 +27,11 @@ public abstract class RustPluginSettingsControllerBase : Controller
     private readonly RustPluginHostedService _plugin;
 
     /// <summary>Creates the controller for one plugin.</summary>
+    /// <summary>
+    /// The page id the contract reserves for settings, matching <c>PageInfo::settings()</c>.
+    /// </summary>
+    private const string SettingsPageId = "settings";
+
     protected RustPluginSettingsControllerBase(RustPluginHostedService plugin)
     {
         _plugin = plugin;
@@ -111,18 +116,28 @@ public abstract class RustPluginSettingsControllerBase : Controller
             return View("~/Views/BtcpayRsSettings/Index.cshtml", model with { Submitted = submitted });
         }
 
-        var actions = _plugin.SubmitSettings(submitted);
+        // Only the settings page saves settings. Every other page's form is the plugin asking
+        // the operator a question, and delivering it as a settings save would have the plugin
+        // persist whatever keys it happened to recognise and ignore the rest.
+        var isSettings = pageId == SettingsPageId;
+
+        var actions = isSettings
+            ? _plugin.SubmitSettings(submitted)
+            : _plugin.SubmitForm(form.Id, submitted);
         ApplyMessages(actions);
 
         // The plugin rejects a submission by returning nothing and logging why.
         if (actions.Count == 0)
         {
-            TempData[WellKnownTempData.ErrorMessage] =
-                "The plugin rejected those settings. Check the server logs for details.";
+            TempData[WellKnownTempData.ErrorMessage] = isSettings
+                ? "The plugin rejected those settings. Check the server logs for details."
+                : "The plugin rejected that submission. Check the server logs for details.";
             return View("~/Views/BtcpayRsSettings/Index.cshtml", model with { Submitted = submitted });
         }
 
-        if (!actions.Any(a => a is uniffi.btcpay.PluginAction.ShowMessage))
+        // A non-settings form nearly always reports its own outcome, so only the settings page
+        // gets a generic confirmation.
+        if (isSettings && !actions.Any(a => a is uniffi.btcpay.PluginAction.ShowMessage))
         {
             TempData[WellKnownTempData.SuccessMessage] = "Settings saved.";
         }

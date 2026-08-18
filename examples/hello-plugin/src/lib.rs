@@ -153,6 +153,18 @@ impl Plugin for HelloPlugin {
                     ),
             )
             .section(table)
+            // A form on a page that is not the settings page. It arrives as
+            // `HostEvent::FormSubmitted` carrying this form's id, not as a settings save, so a
+            // page can ask the operator for input without that input being mistaken for
+            // configuration. Note the id: anything other than "settings".
+            .form(
+                Form::new("note")
+                    .title("Add a note")
+                    .text("text", "Note")
+                    .required()
+                    .help("Recorded in the activity list below, to show a page form working.")
+                    .submit_label("Add note"),
+            )
             .actions(
                 Actions::new()
                     .title("Actions")
@@ -248,6 +260,28 @@ impl Plugin for HelloPlugin {
                 ]
             }
             // Commands are how a page does something, as opposed to saving values.
+            // Submissions from a form that is not the settings form. Delivered separately
+            // precisely so that this cannot be confused with an operator editing settings.
+            HostEvent::FormSubmitted { form_id, values } => {
+                if form_id != "note" {
+                    // A form id the plugin does not know means a stale page or a crafted post.
+                    return Err(PluginError::invalid_input(format!(
+                        "unknown form: {form_id}"
+                    )));
+                }
+
+                let text = values.get("text").map(String::as_str).unwrap_or_default();
+                if text.trim().is_empty() {
+                    return Err(PluginError::invalid_input("A note cannot be empty"));
+                }
+
+                self.record(format!("note: {}", text.trim()));
+                vec![PluginAction::ShowMessage {
+                    level: MessageLevel::Success,
+                    text: "Note added.".to_string(),
+                }]
+            }
+
             HostEvent::CommandInvoked { command, page } => match command.as_str() {
                 "say-hello" => {
                     let greeting = self.settings.lock().unwrap().greeting.clone();

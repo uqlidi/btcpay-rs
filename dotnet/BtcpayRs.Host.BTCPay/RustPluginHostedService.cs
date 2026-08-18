@@ -116,6 +116,25 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
             new Dictionary<string, string>(values)));
     }
 
+    /// <summary>
+    /// Hands a submission from a form that is not the settings form to the plugin.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="SubmitSettings"/> because the two mean entirely different
+    /// things. Every form used to be delivered as a settings save, so a form asking for, say,
+    /// a withdrawal address arrived as if the operator had edited the settings page: the
+    /// plugin would persist whatever it recognised and act on the rest not at all. A page
+    /// that needs input from the operator needs this instead.
+    /// </remarks>
+    public IReadOnlyList<uniffi.btcpay.PluginAction> SubmitForm(
+        string formId,
+        IReadOnlyDictionary<string, string> values)
+    {
+        return _runtime.Dispatch(new uniffi.btcpay.HostEvent.FormSubmitted(
+            formId,
+            new Dictionary<string, string>(values)));
+    }
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // A plugin that cannot start must not take BTCPay down with it. BTCPay catches this
