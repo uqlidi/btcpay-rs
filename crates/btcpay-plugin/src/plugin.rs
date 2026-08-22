@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::error::PluginError;
 use crate::host::HostServices;
 use crate::types::UiDocument;
-use crate::types::{HostEvent, PluginAction, PluginMetadata};
+use crate::types::{HostEvent, PageInfo, PluginAction, PluginMetadata};
 
 /// What a BTCPay plugin written in Rust must provide.
 ///
@@ -50,9 +50,37 @@ pub trait Plugin: Send + Sync + 'static {
 
     /// Declarative description of this plugin's settings form.
     ///
-    /// Rendered by generic Razor views in the host, so no C# or Razor is needed.
+    /// Rendered by generic Razor views in the host, so no C# or Razor is needed. Returning an
+    /// empty document means the plugin has no settings page, and none is generated for it.
     fn settings_schema(&self) -> UiDocument {
         UiDocument::empty()
+    }
+
+    /// Pages this plugin contributes, beyond its settings page.
+    ///
+    /// The settings page is added automatically when [`Plugin::settings_schema`] returns
+    /// content, so a plugin with only settings need not implement this. Override it to add a
+    /// dashboard or any other page, and implement [`Plugin::page`] to build them.
+    ///
+    /// ```ignore
+    /// fn pages(&self) -> Vec<PageInfo> {
+    ///     vec![PageInfo::new("dashboard", "Swap dashboard")]
+    /// }
+    /// ```
+    fn pages(&self) -> Vec<PageInfo> {
+        Vec::new()
+    }
+
+    /// Builds one of the pages from [`Plugin::pages`].
+    ///
+    /// Called on every request, so it reflects current state. `"settings"` is handled by
+    /// [`Plugin::settings_schema`] and does not reach here.
+    ///
+    /// An unknown id means a stale link or a hand-typed URL; returning an empty document is
+    /// the right answer and the host renders a not-found.
+    fn page(&self, id: String) -> Result<UiDocument, PluginError> {
+        let _ = id;
+        Ok(UiDocument::empty())
     }
 
     /// Handle something that happened in BTCPay, returning actions for the host to perform.

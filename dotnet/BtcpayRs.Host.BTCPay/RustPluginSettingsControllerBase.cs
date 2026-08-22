@@ -1,20 +1,26 @@
 using BtcpayRs.Host;
-using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Abstractions.Constants;
+using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Abstractions.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BtcpayRs.Host.BTCPay;
 
 /// <summary>
-/// Serves a plugin's settings page: renders whatever the plugin describes, and feeds a
-/// submission back to it.
+/// Serves a plugin's pages: renders whatever it describes, feeds submissions back to it, and
+/// runs the commands its buttons ask for.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Abstract, and subclassed by a controller that <c>cargo btcpay</c> generates into each
-/// plugin. MVC matches on route templates, so a single shared controller would collide as
-/// soon as two btcpay-rs plugins were installed together. Giving each plugin its own literal
-/// route removes the ambiguity, and the generated subclass is three lines.
+/// plugin. MVC matches on route templates, so a single shared controller would collide as soon
+/// as two btcpay-rs plugins were installed together. Giving each plugin its own literal route
+/// removes the ambiguity, and the generated subclass is three lines.
+/// </para>
+/// <para>
+/// One action serves every page, with the page id as a route value. Pages come from the plugin
+/// at runtime, so they cannot each have a compile-time route.
+/// </para>
 /// </remarks>
 public abstract class RustPluginSettingsControllerBase : Controller
 {
@@ -26,36 +32,74 @@ public abstract class RustPluginSettingsControllerBase : Controller
         _plugin = plugin;
     }
 
-    /// <summary>Renders the settings page.</summary>
-    /// <remarks>
-    /// A controller is generated for every plugin, but plenty of plugins have nothing to
-    /// configure. Rather than serving them an empty page, the route behaves as though it
-    /// does not exist until the plugin describes something to show.
-    /// </remarks>
-    [HttpGet("")]
-    public IActionResult Index()
+    /// <summary>Renders one of the plugin's pages.</summary>
+    [HttpGet("{page?}")]
+    public IActionResult Index(string? page)
     {
-        var model = BuildModel();
-        if (model.Page.Sections.Count == 0) return NotFound();
+        var pageId = page ?? DefaultPage();
+        var model = BuildModel(pageId);
+
+        // A page with nothing on it is indistinguishable from one that does not exist, and an
+        // empty page is a worse answer than a not-found.
+        if (model is null || model.Page.Sections.Count == 0) return NotFound();
 
         return View("~/Views/BtcpayRsSettings/Index.cshtml", model);
     }
 
-    /// <summary>Accepts a submission and hands it to the plugin.</summary>
-    [HttpPost("")]
+    /// <summary>Accepts a form submission or a command press.</summary>
+    [HttpPost("{page?}")]
     [ValidateAntiForgeryToken]
-    public IActionResult Index(string formId)
+    public IActionResult Index(string? page, string? formId, string? command)
     {
-        var model = BuildModel();
-        if (model.Page.Sections.Count == 0) return NotFound();
+        var pageId = page ?? DefaultPage();
+        var model = BuildModel(pageId);
+        if (model is null || model.Page.Sections.Count == 0) return NotFound();
 
+        return command is { Length: > 0 }
+            ? RunCommand(model, pageId, command)
+            : SubmitForm(model, pageId, formId);
+    }
+
+    private IActionResult RunCommand(SettingsPageModel model, string pageId, string command)
+    {
+        // Read from the page the plugin just described, never from the request: that is what
+        // makes a crafted post unable to invent a command or skip a confirmation.
+        var button = model.Page.ButtonByCommand(command);
+        if (button is null)
+        {
+            TempData[WellKnownTempData.ErrorMessage] =
+                "That action is no longer available on this page.";
+            return RedirectToPage(pageId);
+        }
+
+        if (button.NeedsConfirmation && Request.Form["confirmed"] != "true")
+        {
+            // Reached only by a post that skipped the browser's confirmation.
+            TempData[WellKnownTempData.ErrorMessage] = "That action needs confirming first.";
+            return RedirectToPage(pageId);
+        }
+
+        var actions = _plugin.InvokeCommand(command, pageId);
+        ApplyMessages(actions);
+
+        // A command that reported nothing still succeeded; saying so beats silence.
+        if (!actions.Any(a => a is uniffi.btcpay.PluginAction.ShowMessage))
+        {
+            TempData[WellKnownTempData.SuccessMessage] = $"{button.Label} done.";
+        }
+
+        return RedirectToPage(pageId);
+    }
+
+    private IActionResult SubmitForm(SettingsPageModel model, string pageId, string? formId)
+    {
         var form = model.Page.FormById(formId ?? string.Empty);
         if (form is null)
         {
-            // The page is rebuilt from the plugin on every request, so a form id that is not
-            // in it means a stale page or a tampered post.
+            // The page is rebuilt on every request, so a form id that is not on it means a
+            // stale page or a tampered post.
             TempData[WellKnownTempData.ErrorMessage] = "That form is no longer part of this page.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToPage(pageId);
         }
 
         var submitted = Collect(form);
@@ -68,6 +112,7 @@ public abstract class RustPluginSettingsControllerBase : Controller
         }
 
         var actions = _plugin.SubmitSettings(submitted);
+        ApplyMessages(actions);
 
         // The plugin rejects a submission by returning nothing and logging why.
         if (actions.Count == 0)
@@ -77,16 +122,44 @@ public abstract class RustPluginSettingsControllerBase : Controller
             return View("~/Views/BtcpayRsSettings/Index.cshtml", model with { Submitted = submitted });
         }
 
-        TempData[WellKnownTempData.SuccessMessage] = "Settings saved.";
-        return RedirectToAction(nameof(Index));
+        if (!actions.Any(a => a is uniffi.btcpay.PluginAction.ShowMessage))
+        {
+            TempData[WellKnownTempData.SuccessMessage] = "Settings saved.";
+        }
+
+        return RedirectToPage(pageId);
     }
 
-    private SettingsPageModel BuildModel()
+    /// <summary>Surfaces whatever the plugin asked to tell the operator.</summary>
+    private void ApplyMessages(IReadOnlyList<uniffi.btcpay.PluginAction> actions)
     {
-        var page = _plugin.SettingsPage();
+        foreach (var action in actions.OfType<uniffi.btcpay.PluginAction.ShowMessage>())
+        {
+            var key = action.Level switch
+            {
+                uniffi.btcpay.MessageLevel.Error or uniffi.btcpay.MessageLevel.Warning =>
+                    WellKnownTempData.ErrorMessage,
+                _ => WellKnownTempData.SuccessMessage,
+            };
+            TempData[key] = action.Text;
+        }
+    }
+
+    private IActionResult RedirectToPage(string pageId) =>
+        RedirectToAction(nameof(Index), new { page = pageId });
+
+    /// <summary>The page shown when no id is given: the first the plugin offers.</summary>
+    private string DefaultPage() => _plugin.Pages().FirstOrDefault()?.Id ?? "settings";
+
+    private SettingsPageModel? BuildModel(string pageId)
+    {
+        var page = _plugin.PageDocument(pageId);
+        if (page is null) return null;
+
         return new SettingsPageModel(
             _plugin.PluginIdentifier,
             _plugin.PluginName,
+            pageId,
             page,
             new Dictionary<string, string>());
     }
@@ -95,8 +168,8 @@ public abstract class RustPluginSettingsControllerBase : Controller
     /// Reads the submitted value for each field the plugin actually declared.
     /// </summary>
     /// <remarks>
-    /// Driven by the form rather than by the posted keys, so extra fields in a crafted post
-    /// are ignored rather than reaching the plugin or its storage.
+    /// Driven by the form rather than by the posted keys, so extra fields in a crafted post are
+    /// ignored rather than reaching the plugin or its storage.
     /// </remarks>
     private Dictionary<string, string> Collect(UiSection.Form form)
     {
@@ -126,7 +199,7 @@ public abstract class RustPluginSettingsControllerBase : Controller
     /// Checks a submission against the constraints the plugin declared.
     /// </summary>
     /// <remarks>
-    /// The browser enforces the same rules, and a post can ignore all of them, so they are
+    /// The browser enforces the same rules and a post can ignore all of them, so they are
     /// enforced again here before anything reaches the plugin.
     /// </remarks>
     private static List<string> Validate(UiSection.Form form, IReadOnlyDictionary<string, string> submitted)
@@ -169,9 +242,10 @@ public abstract class RustPluginSettingsControllerBase : Controller
     }
 }
 
-/// <summary>What the settings view renders.</summary>
-/// <param name="PluginIdentifier">Identifies the plugin, used in the page's routes.</param>
-/// <param name="PluginName">Shown as the page heading.</param>
+/// <summary>What the page view renders.</summary>
+/// <param name="PluginIdentifier">Identifies the plugin.</param>
+/// <param name="PluginName">Fallback heading when the page has no title.</param>
+/// <param name="PageId">Which page this is, used when posting back to it.</param>
 /// <param name="Page">The page the plugin described.</param>
 /// <param name="Submitted">
 /// Values from a rejected submission, so the operator's typing survives a validation error.
@@ -179,6 +253,7 @@ public abstract class RustPluginSettingsControllerBase : Controller
 public sealed record SettingsPageModel(
     string PluginIdentifier,
     string PluginName,
+    string PageId,
     UiPage Page,
     IReadOnlyDictionary<string, string> Submitted)
 {

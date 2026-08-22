@@ -37,12 +37,12 @@ mod document;
 mod field;
 mod section;
 
-pub use builder::{Form, Stats, Table};
+pub use builder::{Actions, Form, Stats, Table};
 pub use document::{Document, WIRE_VERSION};
 pub use field::{Field, FieldKind, SelectOption};
-pub use section::{AlertLevel, Section, StatCard};
+pub use section::{AlertLevel, Button, ButtonStyle, Section, StatCard};
 
 /// Everything needed to build a page, in one import.
 pub mod prelude {
-    pub use crate::{AlertLevel, Document, Field, Form, Section, Stats, Table};
+    pub use crate::{Actions, AlertLevel, Button, Document, Field, Form, Section, Stats, Table};
 }

@@ -4,7 +4,7 @@
 //! doing so means naming every optional field. These exist so the common case is short.
 
 use crate::field::{Field, FieldKind, SelectOption};
-use crate::section::{Section, StatCard};
+use crate::section::{Button, Section, StatCard};
 
 /// Builds a [`Section::Form`].
 ///
@@ -175,6 +175,49 @@ impl From<Form> for Section {
             title: form.title,
             fields: form.fields,
             submit_label: form.submit_label,
+        }
+    }
+}
+
+/// Builds a [`Section::Actions`].
+///
+/// ```
+/// use btcpay_ui::{Actions, Button};
+///
+/// let actions = Actions::new()
+///     .button(Button::new("refresh", "Refresh").primary())
+///     .button(Button::new("reset", "Reset").destructive("Reset everything?"));
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct Actions {
+    title: Option<String>,
+    buttons: Vec<Button>,
+}
+
+impl Actions {
+    /// An empty group of buttons.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a heading above the buttons.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Adds a button.
+    pub fn button(mut self, button: Button) -> Self {
+        self.buttons.push(button);
+        self
+    }
+}
+
+impl From<Actions> for Section {
+    fn from(actions: Actions) -> Self {
+        Section::Actions {
+            title: actions.title,
+            buttons: actions.buttons,
         }
     }
 }

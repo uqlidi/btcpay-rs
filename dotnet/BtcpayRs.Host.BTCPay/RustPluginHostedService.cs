@@ -82,14 +82,25 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
     public string PluginName => _runtime.Metadata?.Name ?? PluginIdentifier;
 
     /// <summary>
-    /// The settings page the plugin describes, rebuilt on every request so it reflects what
-    /// is currently stored.
+    /// The pages this plugin offers, with the settings page first when it has one.
     /// </summary>
-    public UiPage SettingsPage()
+    public IReadOnlyList<uniffi.btcpay.PageInfo> Pages() => _runtime.Pages();
+
+    /// <summary>
+    /// One of the plugin's pages, rebuilt on every request so it reflects current state.
+    /// </summary>
+    /// <returns>The page, or null when the plugin does not have one by that id.</returns>
+    public UiPage? PageDocument(string pageId)
     {
-        var document = _runtime.SettingsSchema();
-        return document is null ? UiPage.Empty : UiPage.Parse(document.DocumentJson);
+        var document = _runtime.Page(pageId);
+        return document is null ? null : UiPage.Parse(document.DocumentJson);
     }
+
+    /// <summary>
+    /// Tells the plugin a button was pressed, and carries out whatever it asks for.
+    /// </summary>
+    public IReadOnlyList<uniffi.btcpay.PluginAction> InvokeCommand(string command, string pageId) =>
+        _runtime.Dispatch(new uniffi.btcpay.HostEvent.CommandInvoked(command, pageId));
 
     /// <summary>
     /// Hands a settings submission to the plugin and carries out whatever it asks for.

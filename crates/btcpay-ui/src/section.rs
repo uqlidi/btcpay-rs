@@ -56,6 +56,18 @@ pub enum Section {
         text: String,
     },
 
+    /// Buttons that ask the plugin to do something.
+    ///
+    /// Distinct from a form's submit button: a form saves values, a command asks for work.
+    #[serde(rename_all = "camelCase")]
+    Actions {
+        /// Optional heading above the buttons.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        /// The buttons, in order.
+        buttons: Vec<Button>,
+    },
+
     /// A paragraph of plain text.
     #[serde(rename_all = "camelCase")]
     Text {
@@ -93,6 +105,70 @@ impl StatCard {
         self.detail = Some(detail.into());
         self
     }
+}
+
+/// A button that asks the plugin to do something.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Button {
+    /// Identifies the command, and is what the plugin receives when it is pressed.
+    pub command: String,
+    /// Text on the button.
+    pub label: String,
+    /// How prominent, and how alarming, the button looks.
+    pub style: ButtonStyle,
+    /// When set, the operator is asked to confirm, and this is what they are asked.
+    ///
+    /// A command that moves funds or cannot be undone should always set this. The host
+    /// enforces it; a plugin cannot be surprised by an unconfirmed press.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirm: Option<String>,
+}
+
+impl Button {
+    /// An ordinary button.
+    pub fn new(command: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+            label: label.into(),
+            style: ButtonStyle::Secondary,
+            confirm: None,
+        }
+    }
+
+    /// The page's main action.
+    pub fn primary(mut self) -> Self {
+        self.style = ButtonStyle::Primary;
+        self
+    }
+
+    /// Marks the button as destructive, and requires confirmation.
+    ///
+    /// The two go together deliberately: a destructive command without a confirmation is one
+    /// stray click away from something irreversible.
+    pub fn destructive(mut self, question: impl Into<String>) -> Self {
+        self.style = ButtonStyle::Danger;
+        self.confirm = Some(question.into());
+        self
+    }
+
+    /// Asks the operator to confirm before the command runs.
+    pub fn confirm(mut self, question: impl Into<String>) -> Self {
+        self.confirm = Some(question.into());
+        self
+    }
+}
+
+/// How a [`Button`] looks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ButtonStyle {
+    /// The page's main action.
+    Primary,
+    /// An ordinary action.
+    Secondary,
+    /// Something destructive.
+    Danger,
 }
 
 /// How prominent an [`Section::Alert`] is.

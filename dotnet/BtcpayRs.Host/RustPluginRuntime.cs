@@ -127,17 +127,36 @@ public sealed class RustPluginRuntime : IDisposable
     }
 
     /// <summary>Asks the plugin to describe its settings form.</summary>
-    public UiDocument? SettingsSchema()
+    public UiDocument? SettingsSchema() => Page("settings");
+
+    /// <summary>The pages the plugin offers.</summary>
+    public IReadOnlyList<PageInfo> Pages()
+    {
+        if (_handle is null) return [];
+        try
+        {
+            return _handle.Pages();
+        }
+        catch (PluginException ex)
+        {
+            _logger.LogError("[{Plugin}] could not list its pages: {Message}", _pluginId, ex.Message);
+            return [];
+        }
+    }
+
+    /// <summary>Asks the plugin to build one of its pages.</summary>
+    /// <returns>The page, or null when the plugin failed or has no such page.</returns>
+    public UiDocument? Page(string pageId)
     {
         if (_handle is null) return null;
         try
         {
-            return _handle.SettingsSchema();
+            return _handle.Page(pageId);
         }
         catch (PluginException ex)
         {
-            _logger.LogError("[{Plugin}] could not build its settings schema: {Message}",
-                _pluginId, ex.Message);
+            _logger.LogError("[{Plugin}] could not build page '{Page}': {Message}",
+                _pluginId, pageId, ex.Message);
             return null;
         }
     }

@@ -1,11 +1,11 @@
 @using Microsoft.Extensions.DependencyInjection
 @inject IServiceProvider Services
 @*
-    Adds a sidebar entry for every btcpay-rs plugin that has a settings page.
+    Adds a server-menu entry for every page every btcpay-rs plugin offers.
 
-    Registered once no matter how many such plugins are installed, and it enumerates them
-    here. Registering per plugin would render this partial once per plugin, each time listing
-    all of them.
+    Registered once no matter how many such plugins are installed, and it enumerates them here.
+    Registering per plugin would render this partial once per plugin, each time listing all of
+    them.
 
     This sits inside the server menu's <ul>, so it emits <li> items and nothing else.
 *@
@@ -18,7 +18,20 @@
 
 @foreach (var plugin in plugins)
 {
-    <li>
-        <a class="dropdown-item" href="@plugin.SettingsPath">@plugin.PluginName</a>
-    </li>
+    @* Pages come from the plugin at runtime; a plugin that is not running yet reports none,
+       and then only its base entry appears. *@
+    var pages = plugin.Pages().Where(p => p.InMenu).ToList();
+
+    if (pages.Count == 0)
+    {
+        <li><a class="dropdown-item" href="@plugin.SettingsPath">@plugin.PluginName</a></li>
+        continue;
+    }
+
+    foreach (var page in pages)
+    {
+        @* One plugin with one page reads better as just the plugin's name. *@
+        var label = pages.Count == 1 ? plugin.PluginName : $"{plugin.PluginName}: {page.Title}";
+        <li><a class="dropdown-item" href="@(plugin.SettingsPath)/@(page.Id)">@label</a></li>
+    }
 }
