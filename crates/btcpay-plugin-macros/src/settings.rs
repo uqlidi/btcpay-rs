@@ -36,7 +36,12 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream, Error> {
 
     let form_fields = fields.iter().map(SettingField::to_form_call);
     let loads = fields.iter().map(SettingField::to_load);
-    let parses = fields.iter().map(SettingField::to_parse);
+    // Collected rather than lazy: the same parsing is emitted twice, once in `update` and once
+    // in `from_values`, so that the two cannot drift.
+    let parses = fields
+        .iter()
+        .map(SettingField::to_parse)
+        .collect::<Vec<_>>();
     let stores = fields.iter().map(SettingField::to_store);
 
     Ok(quote! {
@@ -65,10 +70,37 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 settings
             }
 
-            /// Parses a submission, applying the same rules the form declares.
+            /// Applies a submission on top of the values already held, leaving a field the
+            /// submission does not mention alone.
+            ///
+            /// **Use this rather than [`Self::from_values`] whenever any field is `secret`.**
+            /// The host omits an untouched secret from the submission, so that a stored password
+            /// survives a save in which the operator did not retype it. That only works if the
+            /// omission is applied to the current settings; parsing onto [`Default`] instead
+            /// turns "leave it alone" into "reset it", quietly wiping the stored value.
+            ///
+            /// Applies the same rules the form declares, and rejects the whole submission if any
+            /// of them fail. `self` is then left partly updated, so parse into a clone if a
+            /// rejection must leave the live settings untouched.
+            pub fn update(
+                &mut self,
+                values: &::std::collections::HashMap<::std::string::String, ::std::string::String>,
+            ) -> ::core::result::Result<(), ::btcpay_plugin::PluginError> {
+                // Named so the generated per-field parsing reads the same in both methods.
+                let settings = self;
+                #(#parses)*
+                ::core::result::Result::Ok(())
+            }
+
+            /// Parses a submission into fresh settings, applying the same rules the form
+            /// declares.
             ///
             /// Use this in `SettingsUpdated`: the values are the submission, and reading them
             /// from storage there would see the previous ones.
+            ///
+            /// Fields the submission does not mention take their [`Default`], which is wrong for
+            /// a `secret` field the operator did not retype. Use [`Self::update`] when the
+            /// struct has one.
             pub fn from_values(
                 values: &::std::collections::HashMap<::std::string::String, ::std::string::String>,
             ) -> ::core::result::Result<Self, ::btcpay_plugin::PluginError>
@@ -76,7 +108,7 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 Self: ::core::default::Default,
             {
                 let mut settings = <Self as ::core::default::Default>::default();
-                #(#parses)*
+                settings.update(values)?;
                 ::core::result::Result::Ok(settings)
             }
 

@@ -274,3 +274,58 @@ fn a_stored_value_that_is_no_longer_an_option_falls_back_when_loading() {
 
     assert_eq!(loaded.network, Network::default());
 }
+
+#[test]
+fn a_save_that_does_not_retype_a_secret_keeps_the_stored_one() {
+    // The whole point of `update`. The host omits an untouched secret from the submission so
+    // that a stored password survives a save; `from_values` cannot honour that, because it
+    // starts from `Default` and has nothing to keep. Parsing onto the current settings does.
+    let mut settings = Settings {
+        api_key: "stored-key".into(),
+        poll_secs: 30,
+        ..Default::default()
+    };
+
+    let submission = HashMap::from([("poll_secs".to_string(), "45".to_string())]);
+    settings.update(&submission).unwrap();
+
+    assert_eq!(settings.api_key, "stored-key", "the secret must survive");
+    assert_eq!(settings.poll_secs, 45, "the edited field must change");
+}
+
+#[test]
+fn from_values_resets_an_omitted_secret_which_is_why_update_exists() {
+    // Documents the trap rather than the fix, so that anyone who reaches for `from_values` in a
+    // struct with a secret sees why it is the wrong tool.
+    let submission = HashMap::from([("poll_secs".to_string(), "45".to_string())]);
+
+    let parsed = Settings::from_values(&submission).unwrap();
+
+    assert_eq!(parsed.api_key, "", "no stored value was available to keep");
+}
+
+#[test]
+fn update_applies_the_same_rules_from_values_does() {
+    // The two share their generated parsing, so a rule cannot hold in one and not the other.
+    let mut settings = Settings::default();
+    let out_of_range = HashMap::from([("poll_secs".to_string(), "1".to_string())]);
+
+    let err = settings.update(&out_of_range).unwrap_err();
+
+    assert!(format!("{err}").contains("Poll interval"));
+}
+
+#[test]
+fn update_leaves_untouched_fields_alone() {
+    let mut settings = Settings {
+        api_key: "key".into(),
+        poll_secs: 30,
+        enabled: true,
+        renamed: "value".into(),
+    };
+    let before = settings.clone();
+
+    settings.update(&HashMap::new()).unwrap();
+
+    assert_eq!(settings, before);
+}
