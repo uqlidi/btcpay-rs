@@ -9,15 +9,41 @@ use btcpay_plugin::{HostError, ABI_VERSION};
 // ------------------------------------------------------------------ mock host
 
 /// In-memory [`HostServices`], standing in for the C# shim.
-#[derive(Default)]
 struct MockHost {
+    data_dir: std::path::PathBuf,
     settings: Mutex<HashMap<String, String>>,
     store: Mutex<HashMap<String, Vec<u8>>>,
     logs: Mutex<Vec<(LogLevel, String)>>,
     notifications: Mutex<Vec<Notification>>,
 }
 
+/// A mock with a real, unique directory, so a plugin under test can actually write files.
+///
+/// Created eagerly rather than lazily: the contract says the directory exists before the
+/// plugin starts, and a mock that behaved otherwise would let a bug through.
+impl Default for MockHost {
+    fn default() -> Self {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let data_dir =
+            std::env::temp_dir().join(format!("btcpay-rs-mock-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&data_dir).expect("a temporary directory for the mock host");
+
+        Self {
+            data_dir,
+            settings: Mutex::default(),
+            store: Mutex::default(),
+            logs: Mutex::default(),
+            notifications: Mutex::default(),
+        }
+    }
+}
+
 impl HostServices for MockHost {
+    fn data_dir(&self) -> String {
+        self.data_dir.to_string_lossy().into_owned()
+    }
+
     fn get_setting(&self, key: String) -> Option<String> {
         self.settings.lock().unwrap().get(&key).cloned()
     }

@@ -12,6 +12,15 @@ namespace BtcpayRs.Host;
 /// </remarks>
 public interface IPluginBackend
 {
+    /// <summary>
+    /// A directory the plugin may write files in, created before it starts.
+    /// </summary>
+    /// <remarks>
+    /// Inside BTCPay's own data directory, so an operator's backups and volume mounts already
+    /// cover it. Not transactional and not migrated: a plugin owns whatever it writes here.
+    /// </remarks>
+    string DataDirectory { get; }
+
     /// <summary>Reads an operator-editable setting.</summary>
     string? GetSetting(string key);
 

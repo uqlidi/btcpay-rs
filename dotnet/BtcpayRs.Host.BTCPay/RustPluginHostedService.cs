@@ -1,6 +1,7 @@
 using System.Reflection;
 using BTCPayServer;
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Configuration;
 using BTCPayServer.Events;
 using BTCPayServer.Services.Invoices;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,7 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
     private readonly RustPluginRuntime _runtime;
     private readonly Assembly _pluginAssembly;
     private readonly TimeSpan _tickInterval;
+    private readonly TimeSpan _shutdownTimeout;
 
     private readonly List<IEventAggregatorSubscription> _subscriptions = new();
     private Timer? _tick;
@@ -30,19 +32,36 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
     /// <param name="tickInterval">
     /// How often to deliver <c>HostEvent.Tick</c>. <see cref="TimeSpan.Zero"/> disables it.
     /// </param>
+    /// <param name="shutdownTimeout">
+    /// How long to wait for the plugin to stop before abandoning it. A plugin that drains work
+    /// on shutdown legitimately needs time; one that deadlocks must not make BTCPay
+    /// unstoppable.
+    /// </param>
     public RustPluginHostedService(
         string pluginId,
         Assembly pluginAssembly,
         ISettingsRepository settings,
         EventAggregator events,
         ILogger<RustPluginHostedService> logger,
-        TimeSpan? tickInterval = null)
+        DataDirectories dataDirectories,
+        TimeSpan? tickInterval = null,
+        TimeSpan? shutdownTimeout = null)
     {
         _events = events;
         _logger = logger;
         _pluginAssembly = pluginAssembly;
         _tickInterval = tickInterval ?? TimeSpan.FromMinutes(1);
-        _runtime = new RustPluginRuntime(pluginId, new SettingsRepositoryBackend(pluginId, settings, logger), logger);
+        _shutdownTimeout = shutdownTimeout ?? TimeSpan.FromSeconds(30);
+
+        // Created before the plugin starts, so a plugin can assume it exists rather than
+        // having to make it.
+        var dataDirectory = Path.Combine(dataDirectories.DataDir, "plugin-data", pluginId);
+        Directory.CreateDirectory(dataDirectory);
+
+        _runtime = new RustPluginRuntime(
+            pluginId,
+            new SettingsRepositoryBackend(pluginId, settings, logger, dataDirectory),
+            logger);
         PluginIdentifier = pluginId;
     }
 
@@ -103,7 +122,7 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         // Order matters: stop feeding events first, then stop the plugin, so nothing is
         // delivered to a plugin that is shutting down.
@@ -113,8 +132,8 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
         _tick?.Dispose();
         _tick = null;
 
-        _runtime.Stop();
-        return Task.CompletedTask;
+        await Deadline.RunAsync(
+            _runtime.Stop, _shutdownTimeout, _logger, $"[{PluginIdentifier}] stopping");
     }
 
     private void OnInvoiceEvent(InvoiceEvent e)

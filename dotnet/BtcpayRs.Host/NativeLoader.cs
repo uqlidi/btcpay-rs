@@ -33,7 +33,7 @@ public static class NativeLoader
     public const string NativeName = "btcpay_plugin_native";
 
     /// <summary>ABI this host understands. Must match the Rust <c>ABI_VERSION</c>.</summary>
-    public const uint SupportedAbi = 2;
+    public const uint SupportedAbi = 3;
 
     private static readonly object Gate = new();
     private static bool _registered;

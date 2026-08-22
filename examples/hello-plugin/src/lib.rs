@@ -25,6 +25,20 @@ impl Plugin for HelloPlugin {
             .get_setting("greeting".into())
             .unwrap_or_else(|| "Hello from Rust".to_string());
 
+        // Writing a file proves the directory is real and writable. A plugin with actual
+        // state would put a wallet or a database here.
+        let data_dir = host.data_dir();
+        match std::fs::write(
+            std::path::Path::new(&data_dir).join("last-start.txt"),
+            format!("{greeting}\n"),
+        ) {
+            Ok(()) => host.log(LogLevel::Debug, format!("wrote state to {data_dir}")),
+            Err(e) => host.log(
+                LogLevel::Warn,
+                format!("could not write to {data_dir}: {e}"),
+            ),
+        }
+
         host.log(LogLevel::Info, format!("hello-plugin started: {greeting}"));
         *self.greeting.lock().unwrap() = greeting;
         *self.host.lock().unwrap() = Some(host);

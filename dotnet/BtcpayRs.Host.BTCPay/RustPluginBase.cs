@@ -43,6 +43,15 @@ public abstract class RustPluginBase : BaseBTCPayServerPlugin
     /// </remarks>
     public virtual string? SettingsPath => null;
 
+    /// <summary>
+    /// How long the host waits for this plugin to stop before abandoning it.
+    /// </summary>
+    /// <remarks>
+    /// Override when a plugin needs longer to finish safely. "Close a socket" and "finish an
+    /// in-flight swap" are not the same wait.
+    /// </remarks>
+    public virtual TimeSpan ShutdownTimeout => TimeSpan.FromSeconds(30);
+
     /// <summary>The partial that adds btcpay-rs plugins to the server menu.</summary>
     /// <remarks>
     /// A full path, not a name. Resolving by name searches the view location formats and
@@ -55,6 +64,7 @@ public abstract class RustPluginBase : BaseBTCPayServerPlugin
         var pluginAssembly = GetType().Assembly;
         var identifier = Identifier;
         var tickInterval = TickInterval;
+        var shutdownTimeout = ShutdownTimeout;
         var settingsPath = SettingsPath;
 
         services.AddSingleton(provider => new RustPluginHostedService(
@@ -63,7 +73,13 @@ public abstract class RustPluginBase : BaseBTCPayServerPlugin
             provider.GetRequiredService<ISettingsRepository>(),
             provider.GetRequiredService<EventAggregator>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RustPluginHostedService>>(),
-            tickInterval)
+            // DataDirectories is not a registered service: BTCPay builds it from
+            // configuration where it needs one, and so do we. Asking DI for it throws, which
+            // crashes the plugin at startup and gets it disabled.
+            new BTCPayServer.Configuration.DataDirectories().Configure(
+                provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()),
+            tickInterval,
+            shutdownTimeout)
         {
             SettingsPath = settingsPath,
         });

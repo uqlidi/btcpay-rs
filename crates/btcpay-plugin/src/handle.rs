@@ -13,7 +13,7 @@ use crate::types::{HostEvent, PluginAction, PluginMetadata};
 ///
 /// Bump on **any** breaking change to the exported surface: a new/removed method on
 /// [`Plugin`], a changed record field, a renamed enum variant.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// Reported to the host before anything else is called.
 #[uniffi::export]
