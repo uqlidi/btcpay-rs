@@ -19,73 +19,73 @@ struct Embedded {
 const HOST_FILES: &[Embedded] = &[
     Embedded {
         relative_path: "BtcpayRs.Host/BtcpayRs.Host.csproj",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/BtcpayRs.Host.csproj"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/BtcpayRs.Host.csproj"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/NativeLoader.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/NativeLoader.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/NativeLoader.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/Deadline.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/Deadline.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/Deadline.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/HostServicesImpl.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/HostServicesImpl.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/HostServicesImpl.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/IPluginBackend.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/IPluginBackend.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/IPluginBackend.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/RustPluginRuntime.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/RustPluginRuntime.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/RustPluginRuntime.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host/UiPage.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host/UiPage.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host/UiPage.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/BtcpayRs.Host.BTCPay.csproj"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/RustPluginBase.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/RustPluginBase.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/RustPluginBase.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/RustPluginHostedService.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/RustPluginHostedService.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/RustPluginHostedService.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/SettingsRepositoryBackend.cs",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/SettingsRepositoryBackend.cs"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/SettingsRepositoryBackend.cs"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/RustPluginSettingsControllerBase.cs",
         contents: include_str!(
-            "../../../dotnet/BtcpayRs.Host.BTCPay/RustPluginSettingsControllerBase.cs"
+            "../dotnet/BtcpayRs.Host.BTCPay/RustPluginSettingsControllerBase.cs"
         ),
     },
     // The generic settings views, compiled into BtcpayRs.Host.BTCPay.
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/Views/_ViewImports.cshtml",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewImports.cshtml"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewImports.cshtml"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/Views/_ViewStart.cshtml",
-        contents: include_str!("../../../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewStart.cshtml"),
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/Views/_ViewStart.cshtml"),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/Views/Shared/_BtcpayRsServerNav.cshtml",
         contents: include_str!(
-            "../../../dotnet/BtcpayRs.Host.BTCPay/Views/Shared/_BtcpayRsServerNav.cshtml"
+            "../dotnet/BtcpayRs.Host.BTCPay/Views/Shared/_BtcpayRsServerNav.cshtml"
         ),
     },
     Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/Views/BtcpayRsSettings/Index.cshtml",
         contents: include_str!(
-            "../../../dotnet/BtcpayRs.Host.BTCPay/Views/BtcpayRsSettings/Index.cshtml"
+            "../dotnet/BtcpayRs.Host.BTCPay/Views/BtcpayRsSettings/Index.cshtml"
         ),
     },
 ];
