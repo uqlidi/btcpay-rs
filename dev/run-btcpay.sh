@@ -2,14 +2,30 @@
 #
 # Installs the packed plugin into a local BTCPay regtest and starts it.
 #
-#   ./dev/run-btcpay.sh [path/to/plugin.btcpay]
+#   ./dev/run-btcpay.sh [path/to/plugin.btcpay | path/to/artifacts/<Identifier>]
 #
 # Installs by extracting into the plugin directory, which is what BTCPay's own installer does
 # after an admin uploads a .btcpay. That skips creating an account just to click Upload.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BTCPAY="${1:-../artifacts/BTCPayServer.Plugins.Hello/0.1.0.0/BTCPayServer.Plugins.Hello.btcpay}"
+# Accepts a .btcpay file, or a directory to take the newest .btcpay from. A directory is the
+# safer thing to pass: the packer puts each build under a version-named subdirectory, and that
+# name comes from the plugin's version rather than from anything the caller controls, so a
+# hardcoded path silently installs an older build the moment the shape of that name changes.
+BTCPAY="${1:-../artifacts/BTCPayServer.Plugins.Hello}"
+
+if [ -d "$BTCPAY" ]; then
+  NEWEST="$(find "$BTCPAY" -name '*.btcpay' -type f -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-)"
+  if [ -z "$NEWEST" ]; then
+    echo "error: no .btcpay found under $BTCPAY. Pack it first with: cargo btcpay package" >&2
+    exit 1
+  fi
+  BTCPAY="$NEWEST"
+  echo "==> using the newest package: $BTCPAY"
+fi
+
 IDENTIFIER="$(basename "$BTCPAY" .btcpay)"
 
 if [ ! -f "$BTCPAY" ]; then
