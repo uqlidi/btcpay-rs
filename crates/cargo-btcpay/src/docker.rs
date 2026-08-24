@@ -4,7 +4,7 @@
 //! install. Running the same pipeline in a pinned image means a developer needs only Docker,
 //! and that the artifact does not depend on whichever versions happen to be on the machine.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::workspace::{cache_root, run_streaming};
@@ -32,23 +32,113 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(cache.join("nuget"))
         .map_err(|e| format!("could not create the cache directory: {e}"))?;
 
-    println!("Packaging in {IMAGE}");
-    run_streaming(
-        "docker run",
-        Command::new("docker")
-            .arg("run")
-            .arg("--rm")
-            .args(["-v", &format!("{}:/plugin", plugin_dir.display())])
-            .args(["-v", &format!("{}:/out", out_dir.display())])
-            .args(["-v", &format!("{}:/cache", cache.display())])
-            .args(["-e", "BTCPAY_RS_CACHE=/cache"])
-            .args(["-e", "NUGET_PACKAGES=/cache/nuget"])
-            // Files written inside the container would otherwise be owned by root.
-            .args(["-u", &format!("{}:{}", user_id(), group_id())])
-            .args(["-w", "/plugin"])
-            .arg(IMAGE)
-            .args(["cargo", "btcpay", "package", "--out", "/out"]),
-    )
+    // Resolved before the command is assembled, because a `-v` has to precede the image name and
+    // everything after the image name is the command to run inside it.
+    let checkout = dev_checkout(&plugin_dir)?;
+
+    let mut command = Command::new("docker");
+    command
+        .arg("run")
+        .arg("--rm")
+        // Mounted at its own host path, not at /plugin, so that a relative path inside the
+        // plugin's Cargo.toml resolves in the container exactly as it does outside it.
+        .args(["-v", &same_path(&plugin_dir)])
+        .args(["-v", &format!("{}:/out", out_dir.display())])
+        .args(["-v", &format!("{}:/cache", cache.display())])
+        .args(["-e", "BTCPAY_RS_CACHE=/cache"])
+        .args(["-e", "NUGET_PACKAGES=/cache/nuget"])
+        // A target directory of its own. The container's rustc is pinned and the host's is
+        // whatever the developer has, and pointing both at one directory makes each build
+        // invalidate the other's fingerprints and start over.
+        .args(["-e", "CARGO_TARGET_DIR=/cache/target"])
+        // Files written inside the container would otherwise be owned by root.
+        .args(["-u", &format!("{}:{}", user_id(), group_id())])
+        .args(["-w", &plugin_dir.display().to_string()]);
+
+    // `btcpay-plugin` is not published yet, so a plugin depends on it by path. That checkout has
+    // to be in the container too, at the same path, or Cargo cannot resolve it. It also carries
+    // this CLI, which is what then gets run: the image has no `cargo btcpay` of its own, and
+    // building from source means the embedded C# can never be a stale copy.
+    if let Some(checkout) = &checkout {
+        command.args(["-v", &same_path(checkout)]);
+    }
+
+    command.arg(IMAGE);
+
+    match &checkout {
+        Some(checkout) => {
+            println!(
+                "Packaging in {IMAGE}, using the btcpay-rs checkout at {}",
+                checkout.display()
+            );
+            command
+                .args(["cargo", "run", "--quiet", "--release"])
+                .args([
+                    "--manifest-path",
+                    &checkout.join("Cargo.toml").display().to_string(),
+                ])
+                .args(["-p", "cargo-btcpay", "--"])
+                .args(["btcpay", "package", "--out", "/out"]);
+        }
+        None => {
+            println!("Packaging in {IMAGE}");
+            command.args(["cargo", "btcpay", "package", "--out", "/out"]);
+        }
+    }
+
+    run_streaming("docker run", &mut command)
+}
+
+/// A bind mount that puts a host directory at the same path inside the container.
+fn same_path(dir: &Path) -> String {
+    format!("{0}:{0}", dir.display())
+}
+
+/// The btcpay-rs checkout a plugin depends on by path, if it does.
+///
+/// Returns the workspace root rather than the crate directory: the crate inherits settings and a
+/// lockfile from the workspace above it, so mounting the crate alone would not build.
+fn dev_checkout(plugin_dir: &Path) -> Result<Option<PathBuf>, String> {
+    let manifest = plugin_dir.join("Cargo.toml");
+    let text = std::fs::read_to_string(&manifest)
+        .map_err(|e| format!("could not read {}: {e}", manifest.display()))?;
+    let parsed: toml::Value = text
+        .parse()
+        .map_err(|e| format!("could not parse {}: {e}", manifest.display()))?;
+
+    let Some(path) = parsed
+        .get("dependencies")
+        .and_then(|deps| deps.get("btcpay-plugin"))
+        .and_then(|dep| dep.get("path"))
+        .and_then(toml::Value::as_str)
+    else {
+        return Ok(None);
+    };
+
+    // Relative paths are relative to the manifest, as Cargo reads them.
+    let crate_dir = plugin_dir.join(path).canonicalize().map_err(|e| {
+        format!(
+            "the btcpay-plugin path dependency points at {path}, which could not be resolved: {e}"
+        )
+    })?;
+
+    let mut candidate = crate_dir.as_path();
+    while let Some(parent) = candidate.parent() {
+        let manifest = parent.join("Cargo.toml");
+        if std::fs::read_to_string(&manifest)
+            .map(|text| text.contains("[workspace]"))
+            .unwrap_or(false)
+        {
+            return Ok(Some(parent.to_path_buf()));
+        }
+        candidate = parent;
+    }
+
+    Err(format!(
+        "the btcpay-plugin path dependency at {} is not inside a Cargo workspace, so there is \
+         nothing to mount into the container",
+        crate_dir.display()
+    ))
 }
 
 fn ensure_image() -> Result<(), String> {
