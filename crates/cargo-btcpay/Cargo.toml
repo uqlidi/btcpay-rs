@@ -4,6 +4,15 @@ description = "Scaffold, build and package BTCPay Server plugins written in Rust
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+
+# Cargo follows the `dotnet/` symlink but stops applying .gitignore past it, so the build output
+# needs excluding by hand.
+exclude = [
+    "dotnet/**/bin/**",
+    "dotnet/**/obj/**",
+    "dotnet/**/Generated/**",
+]
 rust-version.workspace = true
 
 [[bin]]

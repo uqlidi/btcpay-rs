@@ -12,6 +12,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/uqlidi/btcpay-rs"
 rust-version = "1.88"
 
 # `uniffi` is pinned as a PAIR with the C# generator. Bumping one REQUIRES bumping the other:
