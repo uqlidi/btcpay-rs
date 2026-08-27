@@ -67,6 +67,12 @@ public abstract class RustPluginBase : BaseBTCPayServerPlugin
         var shutdownTimeout = ShutdownTimeout;
         var settingsPath = SettingsPath;
 
+        // Per plugin: BTCPay's handler lookup is a ToDictionary on NotificationType, so a
+        // duplicate throws and breaks notifications server-wide.
+        var displayName = Name;
+        services.AddSingleton<BTCPayServer.Abstractions.Contracts.INotificationHandler>(
+            _ => new RustPluginNotification.Handler(identifier, displayName));
+
         services.AddSingleton(provider => new RustPluginHostedService(
             identifier,
             pluginAssembly,
@@ -79,7 +85,8 @@ public abstract class RustPluginBase : BaseBTCPayServerPlugin
             new BTCPayServer.Configuration.DataDirectories().Configure(
                 provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()),
             tickInterval,
-            shutdownTimeout)
+            shutdownTimeout,
+            provider.GetService<BTCPayServer.Services.Notifications.NotificationSender>())
         {
             SettingsPath = settingsPath,
         });

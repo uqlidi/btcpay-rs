@@ -1,6 +1,7 @@
 using System.Reflection;
 using BTCPayServer;
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Services.Notifications;
 using BTCPayServer.Configuration;
 using BTCPayServer.Events;
 using BTCPayServer.Services.Invoices;
@@ -45,7 +46,8 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
         ILogger<RustPluginHostedService> logger,
         DataDirectories dataDirectories,
         TimeSpan? tickInterval = null,
-        TimeSpan? shutdownTimeout = null)
+        TimeSpan? shutdownTimeout = null,
+        NotificationSender? notifications = null)
     {
         _events = events;
         _logger = logger;
@@ -60,7 +62,7 @@ public sealed class RustPluginHostedService : IHostedService, IDisposable
 
         _runtime = new RustPluginRuntime(
             pluginId,
-            new SettingsRepositoryBackend(pluginId, settings, logger, dataDirectory),
+            new SettingsRepositoryBackend(pluginId, settings, logger, dataDirectory, notifications),
             logger);
         PluginIdentifier = pluginId;
     }

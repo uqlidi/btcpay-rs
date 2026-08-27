@@ -54,6 +54,10 @@ const HOST_FILES: &[Embedded] = &[
         contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/RustPluginBase.cs"),
     },
     Embedded {
+        relative_path: "BtcpayRs.Host.BTCPay/RustPluginNotification.cs",
+        contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/RustPluginNotification.cs"),
+    },
+    Embedded {
         relative_path: "BtcpayRs.Host.BTCPay/RustPluginHostedService.cs",
         contents: include_str!("../dotnet/BtcpayRs.Host.BTCPay/RustPluginHostedService.cs"),
     },
