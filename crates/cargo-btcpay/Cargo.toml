@@ -1,6 +1,9 @@
 [package]
 name = "cargo-btcpay"
 description = "Scaffold, build and package BTCPay Server plugins written in Rust."
+readme = "README.md"
+keywords = ["btcpay", "bitcoin", "plugin", "cargo", "cli"]
+categories = ["development-tools::cargo-plugins", "command-line-utilities"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
