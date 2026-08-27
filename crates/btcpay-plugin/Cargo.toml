@@ -1,6 +1,9 @@
 [package]
 name = "btcpay-plugin"
 description = "The contract a BTCPay Server plugin written in Rust implements."
+readme = "README.md"
+keywords = ["btcpay", "bitcoin", "plugin", "uniffi", "ffi"]
+categories = ["development-tools::ffi", "cryptography::cryptocurrencies"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true

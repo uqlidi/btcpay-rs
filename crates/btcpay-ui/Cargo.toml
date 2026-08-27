@@ -1,6 +1,9 @@
 [package]
 name = "btcpay-ui"
 description = "Describe a BTCPay plugin's settings page and dashboard as data."
+readme = "README.md"
+keywords = ["btcpay", "bitcoin", "plugin", "ui", "forms"]
+categories = ["gui", "cryptography::cryptocurrencies"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
