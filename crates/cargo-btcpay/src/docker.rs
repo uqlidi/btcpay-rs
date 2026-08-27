@@ -47,10 +47,12 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<(), String> {
         .args(["-v", &format!("{}:/cache", cache.display())])
         .args(["-e", "BTCPAY_RS_CACHE=/cache"])
         .args(["-e", "NUGET_PACKAGES=/cache/nuget"])
-        // A target directory of its own. The container's rustc is pinned and the host's is
-        // whatever the developer has, and pointing both at one directory makes each build
-        // invalidate the other's fingerprints and start over.
-        .args(["-e", "CARGO_TARGET_DIR=/cache/target"])
+        // One per plugin: every plugin builds a cdylib named `libbtcpay_plugin_native.so`, so a
+        // shared directory lets one plugin's library be packaged under another's identity.
+        .args([
+            "-e",
+            &format!("CARGO_TARGET_DIR=/cache/target/{}", target_key(&plugin_dir)),
+        ])
         // Files written inside the container would otherwise be owned by root.
         .args(["-u", &format!("{}:{}", user_id(), group_id())])
         .args(["-w", &plugin_dir.display().to_string()]);
@@ -117,6 +119,25 @@ fn workspace_dependency_path(plugin_dir: &Path) -> Result<Option<(PathBuf, Strin
             None => return Ok(None),
         };
     }
+}
+
+/// A stable directory name for one plugin's build output.
+///
+/// Keyed by absolute path, so two checkouts of one plugin do not share a directory.
+fn target_key(plugin_dir: &Path) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    plugin_dir.hash(&mut hasher);
+
+    let name = plugin_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("plugin");
+    let safe: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    format!("{safe}-{:016x}", hasher.finish())
 }
 
 /// A bind mount that puts a host directory at the same path inside the container.
@@ -390,6 +411,38 @@ mod tests {
             siblings.len(),
             1,
             "the context should hold only the Dockerfile"
+        );
+    }
+
+    #[test]
+    fn each_plugin_gets_its_own_target_directory() {
+        let a = target_key(Path::new("/home/dev/hello-plugin"));
+        let b = target_key(Path::new("/home/dev/coinswap-maker"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn the_same_plugin_keeps_the_same_target_directory() {
+        assert_eq!(
+            target_key(Path::new("/home/dev/hello-plugin")),
+            target_key(Path::new("/home/dev/hello-plugin"))
+        );
+    }
+
+    #[test]
+    fn two_plugins_sharing_a_directory_name_still_differ() {
+        assert_ne!(
+            target_key(Path::new("/a/plugin")),
+            target_key(Path::new("/b/plugin"))
+        );
+    }
+
+    #[test]
+    fn the_target_key_is_safe_as_a_path_segment() {
+        let key = target_key(Path::new("/home/dev/my plugin.v2"));
+        assert!(
+            key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'),
+            "{key} must be usable as a directory name"
         );
     }
 }
