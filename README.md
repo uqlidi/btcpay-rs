@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/btcpay-rs-logo-dark.svg">
-  <img src="assets/btcpay-rs-logo.svg" alt="btcpay-rs" width="440">
+  <img src="assets/btcpay-rs-logo.svg" alt="btcpay-rs" width="160">
 </picture>
 
 <h2>Write BTCPay Server plugins in Rust.</h2>
@@ -72,7 +72,12 @@ of them.
 | Target | `linux-x64` |
 
 Those two toolchains together are the awkward part, so `--docker` runs the whole pipeline in a
-pinned image and needs only Docker.
+pinned image instead.
+
+There is no prebuilt image published yet, so it has to be built once, and today that image carries
+the toolchains rather than `cargo-btcpay` itself. That is enough when your plugin depends on a
+btcpay-rs checkout, which is the only way to depend on it until the crates are published, because
+the CLI is then run from that checkout. `cargo btcpay` says so plainly if you hit the gap.
 
 The first build fetches a BTCPay Server checkout, because `BTCPayServer.Abstractions` is not
 published on NuGet. It is cached, so only the first build pays for it.
@@ -84,7 +89,7 @@ cargo btcpay new my-plugin        # a project with no C# in it
 cd my-plugin
 cargo test                        # your plugin is a normal Rust crate
 cargo btcpay package              # produce an installable .btcpay
-cargo btcpay package --docker     # the same, with only Docker installed
+cargo btcpay package --docker     # the same, in a pinned container
 ```
 
 Then upload the file from `artifacts/` in BTCPay under Server Settings, Plugins, and restart.
@@ -144,6 +149,15 @@ cargo test --workspace        # the Rust side
 The C# tests need the .NET SDK, or Docker via the pinned build image. `dev/` holds a small
 compose stack: postgres, bitcoind, NBXplorer and BTCPay, plus Tor and a custom signet node used by
 the coinswap plugin.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Two things there are worth knowing before you start: the C#
+host is embedded in `cargo-btcpay`, so editing it means rebuilding the CLI, and two pairs of
+version numbers are duplicated across languages and must be bumped together. `./dev/check-pins.sh`
+checks the second.
+
+[CHANGELOG.md](CHANGELOG.md) records what is in a release and whether the ABI version moved.
 
 ## License
 
