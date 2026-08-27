@@ -81,6 +81,7 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<(), String> {
                 .args(["btcpay", "package", "--out", "/out"]);
         }
         None => {
+            ensure_image_has_cli()?;
             println!("Packaging in {IMAGE}");
             command.args(["cargo", "btcpay", "package", "--out", "/out"]);
         }
@@ -178,6 +179,27 @@ fn dev_checkout(plugin_dir: &Path) -> Result<Option<PathBuf>, String> {
     ))
 }
 
+/// The Dockerfile for the build image, carried inside the binary.
+///
+/// Embedded rather than fetched: someone who installed this from crates.io has no checkout to
+/// point at.
+const BUILD_DOCKERFILE: &str = include_str!("../docker/build.Dockerfile");
+
+/// Writes the embedded Dockerfile somewhere `docker build` can use it.
+///
+/// In its own directory, because that directory becomes the build context and the cache root holds
+/// hundreds of megabytes this Dockerfile does not copy.
+fn materialise_dockerfile() -> Result<PathBuf, String> {
+    let dir = cache_root().join("image");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+
+    let path = dir.join("build.Dockerfile");
+    std::fs::write(&path, BUILD_DOCKERFILE)
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(path)
+}
+
 fn ensure_image() -> Result<(), String> {
     let exists = Command::new("docker")
         .args(["image", "inspect", IMAGE])
@@ -190,10 +212,48 @@ fn ensure_image() -> Result<(), String> {
         return Ok(());
     }
 
+    // Not `docker build -f docker/build.Dockerfile`: a crates.io install has no such file, so
+    // the command points at the copy written out here.
+    let dockerfile = materialise_dockerfile()?;
+    let context = dockerfile.parent().unwrap_or(&dockerfile);
+
     Err(format!(
         "the build image {IMAGE} does not exist. Build it once with:\n\
          \n\
-         \x20 docker build -f docker/build.Dockerfile -t {IMAGE} .\n"
+         \x20 docker build -f {} -t {IMAGE} {}\n\
+         \n\
+         That Dockerfile was just written out of this binary, so it matches the version of \
+         cargo-btcpay you are running. It pins the Rust toolchain and the bindings generator, \
+         which have to agree with each other.\n",
+        dockerfile.display(),
+        context.display()
+    ))
+}
+
+/// Confirms the image can run the CLI, which only the published path needs.
+///
+/// A checkout is mounted and run from; a published dependency has nothing to mount, so the image
+/// must carry `cargo btcpay` itself. It does not yet, and the raw failure names no cause.
+fn ensure_image_has_cli() -> Result<(), String> {
+    let usable = Command::new("docker")
+        .args(["run", "--rm", IMAGE, "cargo", "btcpay", "--version"])
+        .output()
+        .map_err(|e| format!("could not run docker: {e}"))?
+        .status
+        .success();
+
+    if usable {
+        return Ok(());
+    }
+
+    Err(format!(
+        "{IMAGE} does not have cargo-btcpay installed, and this plugin depends on the published \
+         btcpay-plugin crate rather than on a btcpay-rs checkout, so there is nothing to run the \
+         CLI from.\n\
+         \n\
+         Either build without --docker, having installed Rust and the .NET SDK 10.0, or rebuild \
+         the image from a Dockerfile that installs cargo-btcpay. Shipping a prebuilt image is \
+         tracked as release work and is not done yet.\n"
     ))
 }
 
@@ -290,5 +350,46 @@ mod tests {
         .unwrap();
 
         assert_eq!(dev_checkout(&plugin_dir).unwrap(), None);
+    }
+
+    #[test]
+    fn the_embedded_dockerfile_is_really_there() {
+        assert!(
+            BUILD_DOCKERFILE.contains("FROM "),
+            "the embedded Dockerfile should start a build stage"
+        );
+        assert!(
+            BUILD_DOCKERFILE.contains("uniffi-bindgen-cs"),
+            "the image exists to pin the bindings generator, so it must install one"
+        );
+    }
+
+    #[test]
+    fn the_dockerfile_needs_no_build_context() {
+        for instruction in ["COPY ", "ADD "] {
+            assert!(
+                !BUILD_DOCKERFILE
+                    .lines()
+                    .any(|line| line.trim_start().starts_with(instruction)),
+                "the Dockerfile gained a {instruction}, which needs a context this does not provide"
+            );
+        }
+    }
+
+    #[test]
+    fn materialising_writes_a_usable_dockerfile_in_its_own_directory() {
+        let path = materialise_dockerfile().unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), BUILD_DOCKERFILE);
+        let siblings: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(
+            siblings.len(),
+            1,
+            "the context should hold only the Dockerfile"
+        );
     }
 }
