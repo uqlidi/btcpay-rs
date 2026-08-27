@@ -12,4 +12,5 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2", features = ["full"] }
+# `extra-traits` gives syn's types `Debug` and `PartialEq`, which `Kind` derives.
+syn = { version = "2", features = ["full", "extra-traits"] }
