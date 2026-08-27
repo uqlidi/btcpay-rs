@@ -89,6 +89,35 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<(), String> {
     run_streaming("docker run", &mut command)
 }
 
+/// Finds `btcpay-plugin`'s path in the workspace that `plugin_dir` belongs to.
+///
+/// Returns the manifest's directory too: a path in `[workspace.dependencies]` is relative to the
+/// workspace root, not to the member.
+fn workspace_dependency_path(plugin_dir: &Path) -> Result<Option<(PathBuf, String)>, String> {
+    let mut candidate = plugin_dir;
+    loop {
+        let manifest = candidate.join("Cargo.toml");
+        if let Ok(text) = std::fs::read_to_string(&manifest) {
+            let parsed: toml::Value = text
+                .parse()
+                .map_err(|e| format!("could not parse {}: {e}", manifest.display()))?;
+            if let Some(path) = parsed
+                .get("workspace")
+                .and_then(|workspace| workspace.get("dependencies"))
+                .and_then(|deps| deps.get("btcpay-plugin"))
+                .and_then(|dep| dep.get("path"))
+                .and_then(toml::Value::as_str)
+            {
+                return Ok(Some((candidate.to_path_buf(), path.to_string())));
+            }
+        }
+        candidate = match candidate.parent() {
+            Some(parent) => parent,
+            None => return Ok(None),
+        };
+    }
+}
+
 /// A bind mount that puts a host directory at the same path inside the container.
 fn same_path(dir: &Path) -> String {
     format!("{0}:{0}", dir.display())
@@ -106,17 +135,25 @@ fn dev_checkout(plugin_dir: &Path) -> Result<Option<PathBuf>, String> {
         .parse()
         .map_err(|e| format!("could not parse {}: {e}", manifest.display()))?;
 
-    let Some(path) = parsed
+    let dependency = parsed
         .get("dependencies")
-        .and_then(|deps| deps.get("btcpay-plugin"))
-        .and_then(|dep| dep.get("path"))
-        .and_then(toml::Value::as_str)
-    else {
-        return Ok(None);
+        .and_then(|deps| deps.get("btcpay-plugin"));
+
+    let (base, path) = match dependency {
+        Some(dep) if dep.get("workspace").and_then(toml::Value::as_bool) == Some(true) => {
+            match workspace_dependency_path(plugin_dir)? {
+                Some(found) => found,
+                None => return Ok(None),
+            }
+        }
+        Some(dep) => match dep.get("path").and_then(toml::Value::as_str) {
+            Some(path) => (plugin_dir.to_path_buf(), path.to_string()),
+            None => return Ok(None),
+        },
+        None => return Ok(None),
     };
 
-    // Relative paths are relative to the manifest, as Cargo reads them.
-    let crate_dir = plugin_dir.join(path).canonicalize().map_err(|e| {
+    let crate_dir = base.join(&path).canonicalize().map_err(|e| {
         format!(
             "the btcpay-plugin path dependency points at {path}, which could not be resolved: {e}"
         )
@@ -175,4 +212,83 @@ extern "C" {
     fn libc_getuid() -> u32;
     #[link_name = "getgid"]
     fn libc_getgid() -> u32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Builds a workspace whose member declares `btcpay-plugin.workspace = true`.
+    fn workspace_member(root: &Path) -> PathBuf {
+        let checkout = root.join("btcpay-rs");
+        std::fs::create_dir_all(checkout.join("crates/btcpay-plugin/src")).unwrap();
+        std::fs::write(checkout.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+
+        let member = root.join("myplugin");
+        std::fs::create_dir_all(member.join("plugin")).unwrap();
+        std::fs::write(
+            member.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"plugin\"]\n\n[workspace.dependencies]\n\
+             btcpay-plugin = { path = \"../btcpay-rs/crates/btcpay-plugin\" }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            member.join("plugin/Cargo.toml"),
+            "[package]\nname = \"plugin\"\n\n[dependencies]\nbtcpay-plugin.workspace = true\n",
+        )
+        .unwrap();
+        member.join("plugin")
+    }
+
+    #[test]
+    fn a_workspace_dependency_is_recognised_as_a_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let plugin_dir = workspace_member(temp.path());
+
+        let found = dev_checkout(&plugin_dir).unwrap();
+
+        assert_eq!(
+            found.map(|p| p.canonicalize().unwrap()),
+            Some(temp.path().join("btcpay-rs").canonicalize().unwrap()),
+            "should resolve to the workspace root of the checkout"
+        );
+    }
+
+    #[test]
+    fn a_direct_path_dependency_is_still_recognised() {
+        let temp = tempfile::tempdir().unwrap();
+        let checkout = temp.path().join("btcpay-rs");
+        std::fs::create_dir_all(checkout.join("crates/btcpay-plugin")).unwrap();
+        std::fs::write(checkout.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+
+        let plugin_dir = temp.path().join("standalone");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join("Cargo.toml"),
+            "[package]\nname = \"standalone\"\n\n[dependencies]\n\
+             btcpay-plugin = { path = \"../btcpay-rs/crates/btcpay-plugin\" }\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            dev_checkout(&plugin_dir)
+                .unwrap()
+                .map(|p| p.canonicalize().unwrap()),
+            Some(checkout.canonicalize().unwrap())
+        );
+    }
+
+    #[test]
+    fn a_published_dependency_is_not_a_checkout() {
+        let temp = tempfile::tempdir().unwrap();
+        let plugin_dir = temp.path().join("published");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join("Cargo.toml"),
+            "[package]\nname = \"published\"\n\n[dependencies]\nbtcpay-plugin = \"0.1\"\n",
+        )
+        .unwrap();
+
+        assert_eq!(dev_checkout(&plugin_dir).unwrap(), None);
+    }
 }
