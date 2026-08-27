@@ -1,4 +1,5 @@
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Services.Notifications;
 using Microsoft.Extensions.Logging;
 using uniffi.btcpay;
 
@@ -25,20 +26,24 @@ public sealed class SettingsRepositoryBackend : IPluginBackend
     private readonly ISettingsRepository _settings;
     private readonly ILogger _logger;
     private readonly string _pluginId;
+    private readonly NotificationSender? _notifications;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private PluginState? _cache;
 
     /// <summary>Creates the backend for one plugin.</summary>
+    /// <param name="notifications">BTCPay's notification sender, when available.</param>
     public SettingsRepositoryBackend(
         string pluginId,
         ISettingsRepository settings,
         ILogger logger,
-        string dataDirectory)
+        string dataDirectory,
+        NotificationSender? notifications = null)
     {
         _pluginId = pluginId;
         _settings = settings;
         _logger = logger;
+        _notifications = notifications;
         DataDirectory = dataDirectory;
     }
 
@@ -77,11 +82,23 @@ public sealed class SettingsRepositoryBackend : IPluginBackend
     /// <inheritdoc />
     public void Notify(Notification notification)
     {
-        // Raising a BTCPay notification requires wiring its notification pipeline, which is
-        // deliberately left for the UI milestone rather than guessed at here. Logging keeps
-        // the information reachable meanwhile.
         _logger.LogInformation("[{Plugin}] notification: {Title} - {Body}",
             _pluginId, notification.Title, notification.Body);
+
+        if (_notifications is null)
+        {
+            return;
+        }
+
+        _notifications.SendNotification(
+            new AdminScope(),
+            new RustPluginNotification
+            {
+                PluginId = _pluginId,
+                Title = notification.Title,
+                Body = notification.Body,
+                Link = notification.Link,
+            }).GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
