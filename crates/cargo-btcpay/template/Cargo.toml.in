@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 name = "btcpay_plugin_native"
 
 [dependencies]
-btcpay-plugin = "0.1"
+btcpay-plugin = "{{btcpay_plugin_version}}"
 
 [profile.release]
 lto = true

@@ -43,7 +43,7 @@ stored value.
 ## Getting started
 
 ```sh
-cargo install cargo-btcpay
+cargo install cargo-btcpay --version 0.1.0-alpha.1
 cargo btcpay new my-plugin
 ```
 

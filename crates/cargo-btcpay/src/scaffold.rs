@@ -23,8 +23,7 @@ pub struct NewPlugin {
     pub description: String,
     /// Point the generated crate at a local btcpay-plugin instead of the published one.
     ///
-    /// Only for testing this repository against itself: `btcpay-plugin` is not on crates.io
-    /// yet, so a scaffolded project cannot resolve its dependency without this.
+    /// For testing this repository against itself, before its changes are published.
     pub btcpay_plugin_path: Option<PathBuf>,
 }
 
@@ -69,8 +68,13 @@ pub fn create(spec: &NewPlugin) -> Result<Vec<PathBuf>, String> {
     Ok(written)
 }
 
+/// The `btcpay-plugin` version a new project depends on: this CLI's own, since the workspace
+/// versions them together. Exact, because Cargo never matches a pre-release against `"0.1"`.
+const PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn render(template: &str, spec: &NewPlugin) -> String {
     let rendered = template
+        .replace("{{btcpay_plugin_version}}", PLUGIN_VERSION)
         .replace("{{crate_name}}", &spec.crate_name)
         .replace("{{identifier}}", &spec.identifier)
         .replace("{{display_name}}", &spec.display_name)
@@ -78,7 +82,7 @@ fn render(template: &str, spec: &NewPlugin) -> String {
 
     match &spec.btcpay_plugin_path {
         Some(path) => rendered.replace(
-            r#"btcpay-plugin = "0.1""#,
+            &format!(r#"btcpay-plugin = "{PLUGIN_VERSION}""#),
             &format!(r#"btcpay-plugin = {{ path = "{}" }}"#, path.display()),
         ),
         None => rendered,
@@ -303,7 +307,19 @@ mod tests {
             cargo.contains(r#"path = "/checkout/crates/btcpay-plugin""#),
             "got: {cargo}"
         );
-        assert!(!cargo.contains(r#"btcpay-plugin = "0.1""#));
+        assert!(!cargo.contains(r#"btcpay-plugin = ""#), "got: {cargo}");
+    }
+
+    #[test]
+    fn a_new_project_depends_on_the_version_of_this_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("my-plugin");
+
+        create(&spec(&target)).unwrap();
+
+        let cargo = std::fs::read_to_string(target.join("Cargo.toml")).unwrap();
+        let expected = format!(r#"btcpay-plugin = "{}""#, env!("CARGO_PKG_VERSION"));
+        assert!(cargo.contains(&expected), "got: {cargo}");
     }
 
     #[test]

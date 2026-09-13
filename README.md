@@ -53,9 +53,10 @@ and a save that leaves it blank keeps the stored value.
 
 ## Status
 
-**Early, and not yet published.** The crates are not on crates.io, so `cargo btcpay new` emits a
-`btcpay-plugin = "0.1"` dependency that will not resolve until they are. Until then, build against
-a checkout of this repository.
+**Early: `0.1.0-alpha.1` is a pre-release.** Expect breaking changes before `0.1.0`. Cargo only
+selects a pre-release when you ask for it by version, so install the CLI with
+`cargo install cargo-btcpay --version 0.1.0-alpha.1`. Projects made by `cargo btcpay new` already
+name the version they need.
 
 The framework is exercised by two plugins: `examples/hello-plugin` here, and a real
 [coinswap](https://github.com/citadel-tech/coinswap) maker and taker that runs a long-lived
@@ -74,10 +75,10 @@ of them.
 Those two toolchains together are the awkward part, so `--docker` runs the whole pipeline in a
 pinned image instead.
 
-There is no prebuilt image published yet, so it has to be built once, and today that image carries
-the toolchains rather than `cargo-btcpay` itself. That is enough when your plugin depends on a
-btcpay-rs checkout, which is the only way to depend on it until the crates are published, because
-the CLI is then run from that checkout. `cargo btcpay` says so plainly if you hit the gap.
+There is no prebuilt image yet, so it has to be built once. It carries the toolchains but not
+`cargo-btcpay`, so `--docker` only works for a plugin that depends on a btcpay-rs checkout, whose
+CLI it runs from that checkout. A plugin on the published crates has to build without `--docker`
+until the image ships. `cargo btcpay` says so plainly if you hit the gap.
 
 The first build fetches a BTCPay Server checkout, because `BTCPayServer.Abstractions` is not
 published on NuGet. It is cached, so only the first build pays for it.

@@ -13,8 +13,9 @@ Two version numbers matter here and they are not the same thing:
 
 ## [Unreleased]
 
-Nothing is published yet, so everything below is the content of the first release rather than a
-list of changes since one.
+## [0.1.0-alpha.1] - 2026-09-14
+
+The first release, so everything below is its content rather than a list of changes since one.
 
 ### Added
 
@@ -62,10 +63,11 @@ on a page render. Pages do not update themselves. Storage is key/value plus a da
 no schema or migrations. Settings are server-wide, with no per-store scope. Payment method plugins
 are out of scope.
 
-### Not yet published
+### Installing a pre-release
 
-The crates are not on crates.io, so `cargo btcpay new` emits a `btcpay-plugin = "0.1"` dependency
-that does not resolve. Building against a checkout of this repository is the only route until the
-first release.
+Cargo only selects a pre-release when you ask for it by version:
+`cargo install cargo-btcpay --version 0.1.0-alpha.1`. Projects made by `cargo btcpay new` already
+name the version they need.
 
-[Unreleased]: https://github.com/uqlidi/btcpay-rs/commits/master
+[Unreleased]: https://github.com/uqlidi/btcpay-rs/compare/v0.1.0-alpha.1...HEAD
+[0.1.0-alpha.1]: https://github.com/uqlidi/btcpay-rs/releases/tag/v0.1.0-alpha.1
