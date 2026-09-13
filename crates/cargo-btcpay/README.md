@@ -3,7 +3,7 @@
 Scaffold, build and package [BTCPay Server](https://btcpayserver.org) plugins written in Rust.
 
 ```sh
-cargo install cargo-btcpay
+cargo install cargo-btcpay --version 0.1.0-alpha.1
 cargo btcpay new my-plugin        # a project with no C# in it
 cd my-plugin
 cargo test                        # your plugin is a normal Rust crate

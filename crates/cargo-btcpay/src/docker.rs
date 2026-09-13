@@ -57,8 +57,8 @@ pub fn package(plugin_dir: &Path, out_dir: &Path) -> Result<(), String> {
         .args(["-u", &format!("{}:{}", user_id(), group_id())])
         .args(["-w", &plugin_dir.display().to_string()]);
 
-    // `btcpay-plugin` is not published yet, so a plugin depends on it by path. That checkout has
-    // to be in the container too, at the same path, or Cargo cannot resolve it. It also carries
+    // A plugin that depends on a btcpay-rs checkout by path needs that checkout in the container
+    // too, at the same path, or Cargo cannot resolve it. It also carries
     // this CLI, which is what then gets run: the image has no `cargo btcpay` of its own, and
     // building from source means the embedded C# can never be a stale copy.
     if let Some(checkout) = &checkout {
