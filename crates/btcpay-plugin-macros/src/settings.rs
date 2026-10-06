@@ -34,7 +34,12 @@ pub fn derive(input: DeriveInput) -> Result<TokenStream, Error> {
         ));
     }
 
-    let form_fields = fields.iter().map(SettingField::to_form_call);
+    // Hidden fields are skipped here and nowhere else: they still load, parse and store, so
+    // the only thing they lose is a box on the settings page.
+    let form_fields = fields
+        .iter()
+        .filter(|field| !field.hidden)
+        .map(SettingField::to_form_call);
     let loads = fields.iter().map(SettingField::to_load);
     // Collected rather than lazy: the same parsing is emitted twice, once in `update` and once
     // in `from_values`, so that the two cannot drift.
@@ -148,6 +153,7 @@ struct SettingField {
     kind: Kind,
     min: Option<i64>,
     max: Option<i64>,
+    hidden: bool,
 }
 
 impl SettingField {
@@ -165,6 +171,7 @@ impl SettingField {
             kind: kind_of(&field.ty)?,
             min: None,
             max: None,
+            hidden: false,
             ident,
         };
 
@@ -185,6 +192,7 @@ impl SettingField {
                     "help" => parsed.help = Some(meta.value()?.parse::<LitStr>()?.value()),
                     "key" => parsed.key = meta.value()?.parse::<LitStr>()?.value(),
                     "required" => parsed.required = true,
+                    "hidden" => parsed.hidden = true,
                     "secret" => {
                         if parsed.kind != Kind::Text {
                             return Err(meta.error("only a String field can be a secret"));
@@ -200,7 +208,7 @@ impl SettingField {
                     other => {
                         return Err(meta.error(format!(
                             "unknown setting `{other}`; expected label, help, key, required, \
-                             secret, min or max"
+                             hidden, secret, min or max"
                         )))
                     }
                 }

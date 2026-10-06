@@ -24,11 +24,42 @@ struct Settings {
     renamed: String,
 }
 
+/// A value this plugin's own page configures, rather than the settings form.
+#[derive(Debug, Clone, Default, PartialEq, BtcpaySettings)]
+struct WithHidden {
+    #[setting(label = "Shown")]
+    shown: String,
+
+    #[setting(label = "Hidden", hidden)]
+    hidden_value: u32,
+}
+
 fn fields_of(form: Form) -> Vec<btcpay_plugin::ui::Field> {
     match Section::from(form) {
         Section::Form { fields, .. } => fields,
         other => panic!("expected a form, got {other:?}"),
     }
+}
+
+#[test]
+fn a_hidden_field_has_no_box_but_is_still_stored() {
+    let settings = WithHidden {
+        shown: "a".to_string(),
+        hidden_value: 7,
+    };
+
+    let fields = fields_of(settings.form());
+    assert_eq!(fields.len(), 1, "only the shown field gets an input");
+    assert_eq!(fields[0].id, "shown");
+
+    // Storage is the half that must keep working: the plugin's own page has nowhere else to
+    // put the value, and a hidden field that did not persist would silently reset on restart.
+    let values = settings.to_values();
+    assert_eq!(values.get("hidden_value").map(String::as_str), Some("7"));
+
+    let mut parsed = WithHidden::default();
+    parsed.update(&values).expect("stored values should parse");
+    assert_eq!(parsed, settings);
 }
 
 #[test]
