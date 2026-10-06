@@ -78,7 +78,10 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
                 Flag(element, "collapsed")),
             "stats" => new UiSection.Stats(ParseCards(element)),
             "actions" => new UiSection.Actions(Optional(element, "title"), ParseButtons(element)),
-            "alert" => new UiSection.Alert(Text(element, "level", "info"), Text(element, "text")),
+            "alert" => new UiSection.Alert(
+                Text(element, "level", "info"),
+                Text(element, "text"),
+                Optional(element, "title")),
             "text" => new UiSection.Text(Text(element, "text")),
             _ => new UiSection.Unknown(type),
         };
@@ -199,8 +202,8 @@ public abstract record UiSection
     /// <summary>A row of headline numbers.</summary>
     public sealed record Stats(IReadOnlyList<UiStatCard> Cards) : UiSection;
 
-    /// <summary>A coloured notice.</summary>
-    public sealed record Alert(string Level, string Message) : UiSection;
+    /// <summary>A coloured notice, optionally with a headline.</summary>
+    public sealed record Alert(string Level, string Message, string? Title = null) : UiSection;
 
     /// <summary>Buttons that ask the plugin to do something.</summary>
     public sealed record Actions(string? Title, IReadOnlyList<UiButton> Buttons) : UiSection;

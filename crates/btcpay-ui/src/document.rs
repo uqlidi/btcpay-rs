@@ -68,6 +68,7 @@ impl Document {
     pub fn alert(self, level: crate::AlertLevel, text: impl Into<String>) -> Self {
         self.section(Section::Alert {
             level,
+            title: None,
             text: text.into(),
         })
     }
@@ -130,6 +131,30 @@ mod tests {
 
         assert_eq!(parsed, original);
         assert_eq!(parsed.sections.len(), 5);
+    }
+
+    #[test]
+    fn a_plain_alert_carries_no_headline() {
+        // Pinned as the whole section: the document has a `title` of its own, so looking for
+        // the word anywhere in the JSON would pass whatever the alert did.
+        let json = Document::new("t")
+            .alert(AlertLevel::Warning, "Careful")
+            .to_json();
+
+        assert!(
+            json.contains(r#"{"type":"alert","level":"warning","text":"Careful"}"#),
+            "got: {json}"
+        );
+    }
+
+    #[test]
+    fn a_headline_survives_the_wire() {
+        let json = Document::new("t")
+            .section(crate::Alert::new(AlertLevel::Danger, "One line.").title("Funds locked"))
+            .to_json();
+
+        assert!(json.contains(r#""title":"Funds locked""#), "got: {json}");
+        assert!(json.contains(r#""text":"One line.""#), "got: {json}");
     }
 
     #[test]

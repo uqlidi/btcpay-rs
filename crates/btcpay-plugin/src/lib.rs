@@ -74,7 +74,7 @@ pub mod prelude {
         PluginError, PluginEvent, PluginMetadata, WebhookRequest,
     };
     pub use btcpay_plugin_macros::{BtcpayChoice, BtcpaySettings};
-    pub use btcpay_ui::{Actions, AlertLevel, Button, Document, Form, Stats, Table};
+    pub use btcpay_ui::{Actions, Alert, AlertLevel, Button, Document, Form, Stats, Table};
     pub use std::sync::Arc;
 }
 

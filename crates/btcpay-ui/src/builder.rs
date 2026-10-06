@@ -222,6 +222,46 @@ impl From<Actions> for Section {
     }
 }
 
+/// Builds a [`Section::Alert`] with a headline.
+///
+/// A notice long enough to need one is a notice that gets skimmed. The headline carries the
+/// point and the text carries at most a sentence of it.
+#[derive(Debug, Clone)]
+pub struct Alert {
+    level: crate::AlertLevel,
+    title: Option<String>,
+    text: String,
+}
+
+impl Alert {
+    /// A notice with no headline, the same as [`Document::alert`].
+    ///
+    /// [`Document::alert`]: crate::Document::alert
+    pub fn new(level: crate::AlertLevel, text: impl Into<String>) -> Self {
+        Self {
+            level,
+            title: None,
+            text: text.into(),
+        }
+    }
+
+    /// Adds the headline.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+}
+
+impl From<Alert> for Section {
+    fn from(alert: Alert) -> Self {
+        Section::Alert {
+            level: alert.level,
+            title: alert.title,
+            text: alert.text,
+        }
+    }
+}
+
 /// Builds a [`Section::Table`].
 #[derive(Debug, Clone)]
 pub struct Table {
