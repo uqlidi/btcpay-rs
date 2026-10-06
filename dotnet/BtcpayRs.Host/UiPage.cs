@@ -74,7 +74,8 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
                 Optional(element, "title"),
                 Strings(element, "columns"),
                 Rows(element),
-                Optional(element, "emptyMessage")),
+                Optional(element, "emptyMessage"),
+                Flag(element, "collapsed")),
             "stats" => new UiSection.Stats(ParseCards(element)),
             "actions" => new UiSection.Actions(Optional(element, "title"), ParseButtons(element)),
             "alert" => new UiSection.Alert(Text(element, "level", "info"), Text(element, "text")),
@@ -147,6 +148,14 @@ public sealed record UiPage(int WireVersion, string Title, IReadOnlyList<UiSecti
             .ToList();
     }
 
+    /// <summary>
+    /// A tri-state flag: absent leaves the decision to the renderer, rather than reading as false.
+    /// </summary>
+    private static bool? Flag(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : null;
+
     private static IReadOnlyList<string> Strings(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var array) || array.ValueKind != JsonValueKind.Array)
@@ -184,7 +193,8 @@ public abstract record UiSection
         string? Title,
         IReadOnlyList<string> Columns,
         IReadOnlyList<IReadOnlyList<string>> Rows,
-        string? EmptyMessage) : UiSection;
+        string? EmptyMessage,
+        bool? Collapsed) : UiSection;
 
     /// <summary>A row of headline numbers.</summary>
     public sealed record Stats(IReadOnlyList<UiStatCard> Cards) : UiSection;

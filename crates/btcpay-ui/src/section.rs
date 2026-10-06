@@ -38,6 +38,11 @@ pub enum Section {
         /// Shown instead of an empty table.
         #[serde(skip_serializing_if = "Option::is_none")]
         empty_message: Option<String>,
+        /// When set, the table folds away. `true` starts it closed.
+        ///
+        /// Absent means a plain table, so a page written before this existed renders as it did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        collapsed: Option<bool>,
     },
 
     /// A row of headline numbers.

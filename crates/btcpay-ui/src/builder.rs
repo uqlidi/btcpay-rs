@@ -229,6 +229,7 @@ pub struct Table {
     columns: Vec<String>,
     rows: Vec<Vec<String>>,
     empty_message: Option<String>,
+    collapsed: Option<bool>,
 }
 
 impl Table {
@@ -239,6 +240,7 @@ impl Table {
             columns: columns.into_iter().map(Into::into).collect(),
             rows: Vec::new(),
             empty_message: None,
+            collapsed: None,
         }
     }
 
@@ -259,6 +261,15 @@ impl Table {
         self.empty_message = Some(message.into());
         self
     }
+
+    /// Makes the table fold away, closed when `closed` is true.
+    ///
+    /// For a table that is long but not what the page is about. The heading stays visible and
+    /// carries the row count, so a folded table still says how much it is hiding.
+    pub fn collapsed(mut self, closed: bool) -> Self {
+        self.collapsed = Some(closed);
+        self
+    }
 }
 
 impl From<Table> for Section {
@@ -268,6 +279,7 @@ impl From<Table> for Section {
             columns: table.columns,
             rows: table.rows,
             empty_message: table.empty_message,
+            collapsed: table.collapsed,
         }
     }
 }

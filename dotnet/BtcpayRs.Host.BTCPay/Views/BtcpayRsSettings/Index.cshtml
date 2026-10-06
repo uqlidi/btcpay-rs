@@ -90,7 +90,19 @@
                     break;
 
                 case UiSection.Table table:
-                    @if (table.Title is not null)
+                    @* Unbalanced tags on purpose: the body below is rendered once, wrapped in
+                       <details> only when the plugin asked for folding. *@
+                    @if (table.Collapsed is not null)
+                    {
+                        @Html.Raw(table.Collapsed == true
+                            ? "<details class=\"mb-4\">"
+                            : "<details class=\"mb-4\" open>")
+                        <summary class="h4 mt-4 mb-3">
+                            @(table.Title ?? "Details")
+                            <span class="text-secondary fw-normal">(@table.Rows.Count)</span>
+                        </summary>
+                    }
+                    else if (table.Title is not null)
                     {
                         <h4 class="mt-4 mb-3">@table.Title</h4>
                     }
@@ -124,6 +136,10 @@
                                 </tbody>
                             </table>
                         </div>
+                    }
+                    @if (table.Collapsed is not null)
+                    {
+                        @Html.Raw("</details>")
                     }
                     break;
 
