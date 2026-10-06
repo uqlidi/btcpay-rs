@@ -57,6 +57,11 @@ pub enum Section {
     Alert {
         /// How prominent the notice is.
         level: AlertLevel,
+        /// A headline, for a notice that has to survive being skimmed.
+        ///
+        /// Absent means the message stands alone, as it always did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
         /// The message. Plain text; it is HTML-encoded when rendered.
         text: String,
     },
