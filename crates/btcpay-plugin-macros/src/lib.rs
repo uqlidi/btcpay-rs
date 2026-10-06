@@ -282,7 +282,13 @@ fn string_literal(value: Expr, key: &str) -> syn::Result<ExprLit> {
 /// | `key = "..."` | storage key; defaults to the field name |
 /// | `required` | the operator must supply a value |
 /// | `secret` | a password input, never sent to the browser |
+/// | `hidden` | kept and stored, but given no box on the settings page |
 /// | `min` / `max` | bounds, for numeric fields |
+///
+/// `hidden` is for a value the plugin configures from one of its own pages, where the setting
+/// only makes sense next to something else, or only within some window. It is not a way to keep
+/// configuration off the page that exists to show it: a hidden field an operator cannot reach
+/// anywhere is one they cannot fix.
 ///
 /// # Supported types
 ///
