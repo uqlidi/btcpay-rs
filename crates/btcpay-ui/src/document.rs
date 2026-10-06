@@ -133,6 +133,29 @@ mod tests {
     }
 
     #[test]
+    fn a_plain_table_says_nothing_about_folding() {
+        // Absent, not false: a host that predates folding must render it exactly as before.
+        let json = Document::new("t")
+            .table(Table::new(["When"]).row(["now"]))
+            .to_json();
+
+        assert!(!json.contains("collapsed"), "got: {json}");
+    }
+
+    #[test]
+    fn a_folded_table_carries_its_state() {
+        let closed = Document::new("t")
+            .table(Table::new(["When"]).collapsed(true))
+            .to_json();
+        let open = Document::new("t")
+            .table(Table::new(["When"]).collapsed(false))
+            .to_json();
+
+        assert!(closed.contains(r#""collapsed":true"#), "got: {closed}");
+        assert!(open.contains(r#""collapsed":false"#), "got: {open}");
+    }
+
+    #[test]
     fn the_wire_format_uses_the_casing_the_host_expects() {
         // The host reads this with System.Text.Json, which is configured for camelCase.
         let json = Document::new("t").to_json();
